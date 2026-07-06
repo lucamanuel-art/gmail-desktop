@@ -39,7 +39,11 @@ export default function Sidebar() {
     if (!bridge) return;
     bridge.onProfilesChanged((list) => {
       setProfiles(list);
-      setActive((cur) => cur ?? (list[0] ? { index: list[0].index, surface: 'mail' } : null));
+      // Keep the active selection valid: re-derive if the active profile vanished.
+      setActive((cur) => {
+        if (cur && list.some((p) => p.index === cur.index)) return cur;
+        return list[0] ? { index: list[0].index, surface: 'mail' } : null;
+      });
     });
     bridge.onUnreadChanged(setUnread);
     bridge.onSettingsForceClose(() => setSettingsOpen(false));
@@ -89,7 +93,7 @@ export default function Sidebar() {
                 ) : (
                   (p.name || p.email || 'A').charAt(0).toUpperCase()
                 )}
-                {unread[p.index] > 0 && (
+                {(unread[p.index] ?? 0) > 0 && (
                   <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-[18px] text-white">
                     {unread[p.index]}
                   </span>

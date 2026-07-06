@@ -6,6 +6,7 @@ import { ProfileViewManager, type Profile, type Surface } from './profile-view-m
 import { ColorStore } from './color-store';
 import { colorForIndex } from './palette';
 import { planNext } from './detection-planner';
+import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
 
@@ -13,7 +14,7 @@ const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
 const SIDEBAR_PRELOAD_PATH = join(__dirname, 'sidebar-preload.js');
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
-const PROBE_TIMEOUT_MS = 8000;
+const PROBE_TIMEOUT_MS = 16000; // > preload identity poll window (~15s) so slow accounts aren't missed
 
 let mainWindow: BrowserWindow | null = null;
 let manager: ProfileViewManager | null = null;
@@ -27,6 +28,8 @@ const seenEmails = new Set<string>();
 const unreadCounts: Record<number, number> = {};
 let active: { index: number; surface: Surface } | null = null;
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
+let probingIndex: number | null = null;
+let detectionStarted = false;
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -55,25 +58,32 @@ function clearProbeTimer(): void {
 }
 
 function probe(index: number): void {
+  probingIndex = index;
   manager?.ensureView(index, 'mail', false); // hidden probe; identity arrives via onIdentity
   clearProbeTimer();
   probeTimer = setTimeout(() => {
     // No identity within the timeout: no account at this index. Discard and stop.
     manager?.discardView(index, 'mail');
     probeTimer = null;
+    probingIndex = null;
   }, PROBE_TIMEOUT_MS);
 }
 
 function onIdentity(index: number, identity: { email: string; name: string; avatarUrl: string }): void {
+  // Ignore re-fired identity for an already-registered index: Gmail's SPA re-runs the
+  // preload identity poll on full navigations, which would otherwise abort an in-flight
+  // probe timer and spuriously advance/leak views.
+  if (profiles.some((p) => p.index === index)) return;
   const decision = planNext([...seenEmails], index, identity);
   clearProbeTimer();
-  if (decision.register && identity.email && !profiles.some((p) => p.index === index)) {
+  probingIndex = null;
+  if (decision.register && identity.email) {
     seenEmails.add(identity.email);
     const color = colors!.get(identity.email) ?? colorForIndex(index);
     profiles.push({ index, email: identity.email, name: identity.name, avatarUrl: identity.avatarUrl, color });
     profiles.sort((a, b) => a.index - b.index);
     pushProfiles();
-  } else if (!decision.register && index > 0 && !profiles.some((p) => p.index === index)) {
+  } else if (index > 0) {
     manager?.discardView(index, 'mail'); // duplicate/empty probe view
   }
   if (!decision.stop) probe(index + 1);
@@ -90,6 +100,11 @@ function startDetection(): void {
 
 function redetect(): void {
   clearProbeTimer();
+  // Tear down a probe view still in flight so repeated re-detects don't orphan hidden views.
+  if (probingIndex !== null && !profiles.some((p) => p.index === probingIndex)) {
+    manager?.discardView(probingIndex, 'mail');
+  }
+  probingIndex = null;
   const maxIndex = profiles.length ? Math.max(...profiles.map((p) => p.index)) : -1;
   probe(maxIndex + 1);
 }
@@ -108,6 +123,7 @@ function createWindow(): void {
     (index, count) => {
       unreadCounts[index] = count;
       pushUnread();
+      applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
     (index) => {
       mainWindow?.show();
@@ -123,9 +139,12 @@ function createWindow(): void {
   if (DEV_URL) void mainWindow.loadURL(DEV_URL);
   else void mainWindow.loadURL('app://bundle/');
 
-  mainWindow.webContents.once('did-finish-load', () => {
-    pushProfiles();
-    startDetection();
+  mainWindow.webContents.on('did-finish-load', () => {
+    pushProfiles(); // re-push on any (re)load so the sidebar repopulates
+    if (!detectionStarted) {
+      detectionStarted = true;
+      startDetection();
+    }
   });
 
   mainWindow.on('close', (e) => {

@@ -8,7 +8,9 @@ export class ColorStore {
     if (!existsSync(this.filePath)) return {};
     try {
       const parsed = JSON.parse(readFileSync(this.filePath, 'utf8'));
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, string>)
+        : {};
     } catch {
       return {};
     }
