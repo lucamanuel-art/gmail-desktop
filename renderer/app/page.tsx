@@ -64,7 +64,7 @@ export default function Sidebar() {
             style={{ backgroundColor: a.color }}
           >
             {a.label.charAt(0).toUpperCase()}
-            {unread[a.id] > 0 && (
+            {(unread[a.id] ?? 0) > 0 && (
               <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-[18px] text-white">
                 {unread[a.id]}
               </span>
