@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AccountsStore, type Account } from './accounts-store';
 import { AccountViewManager } from './account-view-manager';
-import { totalUnread } from './badge-math';
 import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
@@ -124,5 +123,3 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isQuitting = true;
 });
-
-export { totalUnread };
