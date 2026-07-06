@@ -2,18 +2,25 @@ import { BrowserWindow, WebContentsView } from 'electron';
 import type { Account } from './accounts-store';
 import { contentBounds } from './layout';
 import { IPC } from './ipc';
+import { mapKey, toSendInputEvents, type KeyInput } from './outlook-shortcuts';
 
 const GMAIL_URL = 'https://mail.google.com/';
 
 export class AccountViewManager {
   private views = new Map<string, WebContentsView>();
   private activeId: string | null = null;
+  private editableFocused = new Map<string, boolean>();
+  private shortcutsEnabled = true;
 
   constructor(
     private readonly win: BrowserWindow,
     private readonly preloadPath: string,
     private readonly onUnread: (accountId: string, count: number) => void,
     private readonly onActivate: (accountId: string) => void,
+    private readonly onIdentity: (
+      accountId: string,
+      identity: { email: string; name: string; avatarUrl: string },
+    ) => void,
   ) {
     this.win.on('resize', () => this.relayout());
   }
@@ -32,6 +39,22 @@ export class AccountViewManager {
         this.onUnread(account.id, Number(args[0]) || 0);
       } else if (channel === IPC.NOTIFICATION_ACTIVATE) {
         this.onActivate(account.id);
+      } else if (channel === IPC.ACCOUNT_IDENTITY) {
+        this.onIdentity(account.id, args[0]);
+      } else if (channel === IPC.EDITABLE_FOCUS) {
+        this.editableFocused.set(account.id, Boolean(args[0]));
+      }
+    });
+    view.webContents.on('before-input-event', (event, input) => {
+      if (!this.shortcutsEnabled) return;
+      const editable = this.editableFocused.get(account.id) ?? false;
+      const result = mapKey(input as unknown as KeyInput, editable);
+      if (!result.preventDefault) return;
+      event.preventDefault();
+      if (!result.inject) return;
+      for (const ev of toSendInputEvents(result.inject, process.platform)) {
+        view.webContents.sendInputEvent({ type: 'keyDown', keyCode: ev.keyCode, modifiers: ev.modifiers as Electron.MouseInputEvent['modifiers'] });
+        view.webContents.sendInputEvent({ type: 'keyUp', keyCode: ev.keyCode, modifiers: ev.modifiers as Electron.MouseInputEvent['modifiers'] });
       }
     });
     void view.webContents.loadURL(GMAIL_URL);
@@ -54,6 +77,7 @@ export class AccountViewManager {
     this.win.contentView.removeChildView(view);
     view.webContents.close();
     this.views.delete(accountId);
+    this.editableFocused.delete(accountId);
     if (this.activeId === accountId) this.activeId = null;
   }
 
@@ -62,6 +86,18 @@ export class AccountViewManager {
       const view = this.views.get(this.activeId);
       if (view) this.applyBounds(view);
     }
+  }
+
+  setShortcutsEnabled(enabled: boolean): void {
+    this.shortcutsEnabled = enabled;
+  }
+
+  hideAll(): void {
+    for (const v of this.views.values()) v.setVisible(false);
+  }
+
+  showActive(): void {
+    if (this.activeId) this.show(this.activeId);
   }
 
   accountIdForWebContents(id: number): string | null {
