@@ -19,4 +19,6 @@ export const IPC = {
   SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
   SETTINGS_GET: 'settings:get', // invoke -> Settings
   SETTINGS_SET: 'settings:set', // invoke(patch) -> Settings
+  // main -> renderer (sidebar)
+  SETTINGS_FORCE_CLOSE: 'settings:force-close', // tell the sidebar to close its settings panel
 } as const;

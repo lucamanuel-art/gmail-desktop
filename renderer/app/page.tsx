@@ -25,6 +25,7 @@ interface DesktopBridge {
   toggleSettings(open: boolean): void;
   getSettings(): Promise<{ outlookShortcuts: boolean }>;
   setSettings(patch: { outlookShortcuts?: boolean }): Promise<{ outlookShortcuts: boolean }>;
+  onSettingsForceClose(cb: () => void): void;
 }
 
 declare global {
@@ -56,6 +57,7 @@ export default function Sidebar() {
     });
     bridge.onAccountsChanged(setAccounts);
     bridge.onUnreadChanged(setUnread);
+    bridge.onSettingsForceClose(() => setSettingsOpen(false));
   }, []);
 
   function select(id: string) {

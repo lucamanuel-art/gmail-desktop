@@ -21,6 +21,7 @@ let store: AccountsStore | null = null;
 let settings: SettingsStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let settingsPanelOpen = false;
 const unreadCounts: Record<string, number> = {};
 
 protocol.registerSchemesAsPrivileged([
@@ -45,6 +46,12 @@ function pushAccounts(): void {
 
 function activate(accountId: string): void {
   mainWindow?.show();
+  // A notification click pulls the user to this account; if the settings panel
+  // is open, close it first so the un-hidden Gmail view can't paint over it.
+  if (settingsPanelOpen) {
+    settingsPanelOpen = false;
+    mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
+  }
   manager?.show(accountId);
   mainWindow?.webContents.send(IPC.ACCOUNTS_CHANGED, store?.list() ?? []);
 }
@@ -115,6 +122,7 @@ function registerIpc(): void {
     return updated;
   });
   ipcMain.on(IPC.SETTINGS_TOGGLE, (_e, arg: { open: boolean }) => {
+    settingsPanelOpen = arg.open;
     if (arg.open) manager?.hideAll();
     else manager?.showActive();
   });

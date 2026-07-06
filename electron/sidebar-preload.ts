@@ -28,4 +28,7 @@ contextBridge.exposeInMainWorld('desktop', {
   getSettings: (): Promise<{ outlookShortcuts: boolean }> => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (patch: { outlookShortcuts?: boolean }): Promise<{ outlookShortcuts: boolean }> =>
     ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
+  onSettingsForceClose: (cb: () => void): void => {
+    ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());
+  },
 });
