@@ -12,8 +12,45 @@ interface Profile {
 
 const SWATCHES = ['#4285F4', '#EA4335', '#34A853', '#FBBC05', '#A142F4', '#00ACC1'];
 
+interface UpdateStatus {
+  state:
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+    | 'dev';
+  currentVersion?: string;
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 function initial(p: Profile): string {
   return (p.name || p.email || '?').trim().charAt(0).toUpperCase() || '?';
+}
+
+function updateStatusText(u: UpdateStatus): string {
+  switch (u.state) {
+    case 'checking':
+      return 'Checking for updates…';
+    case 'available':
+      return `Update available: v${u.version}`;
+    case 'not-available':
+      return "You're on the latest version.";
+    case 'downloading':
+      return `Downloading update… ${u.percent ?? 0}%`;
+    case 'downloaded':
+      return 'Update downloaded — restarting to install…';
+    case 'error':
+      return `Couldn't check for updates: ${u.message ?? 'unknown error'}`;
+    case 'dev':
+      return 'Updates are only available in the installed app.';
+    default:
+      return '';
+  }
 }
 
 function TrashIcon({ className = '' }: { className?: string }) {
@@ -36,13 +73,24 @@ export function SettingsPanel({
   profiles,
   onClose,
   onRedetect,
+  update,
+  onCheckUpdate,
+  onDownloadUpdate,
+  onInstallUpdate,
 }: {
   profiles: Profile[];
   onClose: () => void;
   onRedetect: () => void;
+  update: UpdateStatus;
+  onCheckUpdate: () => void;
+  onDownloadUpdate: () => void;
+  onInstallUpdate: () => void;
 }) {
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+
+  const busy = update.state === 'checking' || update.state === 'downloading';
+  const statusText = updateStatusText(update);
 
   return (
     <div className="flex h-screen flex-1 flex-col overflow-y-auto bg-neutral-950 text-neutral-100">
@@ -55,6 +103,52 @@ export function SettingsPanel({
           >
             Close
           </button>
+        </div>
+
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          About &amp; updates
+        </h2>
+        <div className="mb-6 rounded-xl border border-white/5 bg-neutral-900 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">Gmail Desktop</div>
+              <div className="text-xs text-neutral-400">Version {update.currentVersion ?? '—'}</div>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              {update.state === 'available' && (
+                <button
+                  onClick={onDownloadUpdate}
+                  className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
+                >
+                  Update now
+                </button>
+              )}
+              {update.state === 'downloaded' && (
+                <button
+                  onClick={onInstallUpdate}
+                  className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
+                >
+                  Restart &amp; install
+                </button>
+              )}
+              <button
+                onClick={onCheckUpdate}
+                disabled={busy}
+                className="rounded-lg bg-neutral-800 px-3.5 py-1.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {update.state === 'checking' ? 'Checking…' : 'Check for updates'}
+              </button>
+            </div>
+          </div>
+          {statusText && (
+            <p
+              className={`mt-3 text-xs ${
+                update.state === 'error' ? 'text-red-400' : 'text-neutral-400'
+              }`}
+            >
+              {statusText}
+            </p>
+          )}
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">

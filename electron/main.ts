@@ -29,6 +29,8 @@ let removed: RemovedStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
+let updateRequested = false; // user pressed "Update now" → auto-install once downloaded
+let lastUpdateStatus: Record<string, unknown> = { state: 'idle' };
 
 const SESSION_PARTITION = 'persist:google';
 
@@ -222,6 +224,7 @@ function createWindow(): void {
 
   mainWindow.webContents.on('did-finish-load', () => {
     pushProfiles(); // re-push on any (re)load so the sidebar repopulates
+    mainWindow?.webContents.send(IPC.UPDATE_STATUS, { ...lastUpdateStatus, currentVersion: app.getVersion() });
     if (!detectionStarted) {
       detectionStarted = true;
       startDetection();
@@ -232,6 +235,28 @@ function createWindow(): void {
     if (shouldHideOnClose({ isQuitting, platform: process.platform })) {
       e.preventDefault();
       mainWindow?.hide();
+    }
+  });
+}
+
+function sendUpdate(status: Record<string, unknown>): void {
+  lastUpdateStatus = { ...status, currentVersion: app.getVersion() };
+  mainWindow?.webContents.send(IPC.UPDATE_STATUS, lastUpdateStatus);
+}
+
+function setupUpdater(): void {
+  autoUpdater.autoDownload = false; // download only when the user asks
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => sendUpdate({ state: 'checking' }));
+  autoUpdater.on('update-available', (info) => sendUpdate({ state: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', (info) => sendUpdate({ state: 'not-available', version: info.version }));
+  autoUpdater.on('error', (err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+  autoUpdater.on('download-progress', (p) => sendUpdate({ state: 'downloading', percent: Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdate({ state: 'downloaded', version: info.version });
+    if (updateRequested) {
+      isQuitting = true;
+      autoUpdater.quitAndInstall();
     }
   });
 }
@@ -263,6 +288,23 @@ function registerIpc(): void {
     }
   });
   ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => removeAccount(arg.email));
+  ipcMain.on(IPC.UPDATE_CHECK, () => {
+    if (!app.isPackaged) return sendUpdate({ state: 'dev' });
+    sendUpdate({ state: 'checking' });
+    autoUpdater
+      .checkForUpdates()
+      .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+  });
+  ipcMain.on(IPC.UPDATE_DOWNLOAD, () => {
+    updateRequested = true;
+    autoUpdater
+      .downloadUpdate()
+      .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+  });
+  ipcMain.on(IPC.UPDATE_INSTALL, () => {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  });
   ipcMain.on(IPC.SETTINGS_TOGGLE, (_e, arg: { open: boolean }) => {
     settingsPanelOpen = arg.open;
     if (arg.open) manager?.hideAll();
@@ -303,10 +345,11 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
   // Auto-update from GitHub Releases (packaged builds only; no-op in dev).
+  setupUpdater();
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error('Auto-update check failed:', err);
-    });
+    autoUpdater
+      .checkForUpdates()
+      .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
   }
 });
 

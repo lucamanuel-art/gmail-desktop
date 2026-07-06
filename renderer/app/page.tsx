@@ -12,6 +12,24 @@ export interface Profile {
 }
 export type Surface = 'mail' | 'calendar';
 
+export type UpdateState =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+  | 'dev';
+
+export interface UpdateStatus {
+  state: UpdateState;
+  currentVersion?: string;
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 interface DesktopBridge {
   onProfilesChanged(cb: (profiles: Profile[]) => void): void;
   onUnreadChanged(cb: (counts: Record<number, number>) => void): void;
@@ -22,6 +40,10 @@ interface DesktopBridge {
   removeAccount(email: string): void;
   toggleSettings(open: boolean): void;
   onSettingsForceClose(cb: () => void): void;
+  checkForUpdate(): void;
+  downloadUpdate(): void;
+  installUpdate(): void;
+  onUpdateStatus(cb: (status: UpdateStatus) => void): void;
 }
 
 declare global {
@@ -90,6 +112,7 @@ export default function Sidebar() {
   const [active, setActive] = useState<{ index: number; surface: Surface } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
+  const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' });
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -104,6 +127,7 @@ export default function Sidebar() {
     });
     bridge.onUnreadChanged(setUnread);
     bridge.onSettingsForceClose(() => setSettingsOpen(false));
+    bridge.onUpdateStatus(setUpdate);
   }, []);
 
   function open(index: number, surface: Surface) {
@@ -210,7 +234,15 @@ export default function Sidebar() {
       </nav>
 
       {settingsOpen && (
-        <SettingsPanel profiles={profiles} onClose={closeSettings} onRedetect={redetect} />
+        <SettingsPanel
+          profiles={profiles}
+          onClose={closeSettings}
+          onRedetect={redetect}
+          update={update}
+          onCheckUpdate={() => window.desktop?.checkForUpdate()}
+          onDownloadUpdate={() => window.desktop?.downloadUpdate()}
+          onInstallUpdate={() => window.desktop?.installUpdate()}
+        />
       )}
     </div>
   );

@@ -11,8 +11,12 @@ export const IPC = {
   SET_COLOR: 'color:set', // send({email, color})
   REMOVE_ACCOUNT: 'accounts:remove', // send({email}) — hide account + skip on detect
   SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
+  UPDATE_CHECK: 'update:check', // send() — check GitHub for a newer release
+  UPDATE_DOWNLOAD: 'update:download', // send() — download + auto-install the update
+  UPDATE_INSTALL: 'update:install', // send() — restart into an already-downloaded update
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
+  UPDATE_STATUS: 'update:status', // { state, currentVersion, version?, percent?, message? }
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
 } as const;

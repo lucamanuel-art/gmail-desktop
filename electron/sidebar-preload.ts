@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld('desktop', {
   setColor: (email: string, color: string): void =>
     ipcRenderer.send(IPC.SET_COLOR, { email, color }),
   removeAccount: (email: string): void => ipcRenderer.send(IPC.REMOVE_ACCOUNT, { email }),
+  checkForUpdate: (): void => ipcRenderer.send(IPC.UPDATE_CHECK),
+  downloadUpdate: (): void => ipcRenderer.send(IPC.UPDATE_DOWNLOAD),
+  installUpdate: (): void => ipcRenderer.send(IPC.UPDATE_INSTALL),
+  onUpdateStatus: (cb: (status: unknown) => void): void => {
+    ipcRenderer.on(IPC.UPDATE_STATUS, (_e, status) => cb(status));
+  },
   toggleSettings: (open: boolean): void => ipcRenderer.send(IPC.SETTINGS_TOGGLE, { open }),
   onSettingsForceClose: (cb: () => void): void => {
     ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());
