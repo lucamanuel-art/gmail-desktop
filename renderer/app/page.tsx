@@ -1,27 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
 import { SettingsPanel } from './SettingsPanel';
 
-interface Account {
-  id: string;
-  label: string;
+export interface Profile {
+  index: number;
+  email: string;
+  name: string;
+  avatarUrl: string;
   color: string;
-  email?: string;
-  name?: string;
-  avatarUrl?: string;
 }
+export type Surface = 'mail' | 'calendar';
 
-// Bridge exposed by the Electron preload for the sidebar (Task 11).
 interface DesktopBridge {
-  listAccounts(): Promise<Account[]>;
-  addAccount(input: { label: string; color: string }): Promise<Account>;
-  removeAccount(id: string): Promise<void>;
-  switchAccount(id: string): void;
-  onAccountsChanged(cb: (accounts: Account[]) => void): void;
-  onUnreadChanged(cb: (counts: Record<string, number>) => void): void;
-  updateAccount(id: string, patch: { label?: string; color?: string }): Promise<Account | null>;
+  onProfilesChanged(cb: (profiles: Profile[]) => void): void;
+  onUnreadChanged(cb: (counts: Record<number, number>) => void): void;
+  switchSurface(index: number, surface: Surface): void;
+  redetect(): void;
+  setColor(email: string, color: string): void;
   toggleSettings(open: boolean): void;
   onSettingsForceClose(cb: () => void): void;
 }
@@ -33,10 +29,31 @@ declare global {
 }
 
 export default function Sidebar() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [unread, setUnread] = useState<Record<string, number>>({});
-  const [active, setActive] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [unread, setUnread] = useState<Record<number, number>>({});
+  const [active, setActive] = useState<{ index: number; surface: Surface } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const bridge = window.desktop;
+    if (!bridge) return;
+    bridge.onProfilesChanged((list) => {
+      setProfiles(list);
+      setActive((cur) => cur ?? (list[0] ? { index: list[0].index, surface: 'mail' } : null));
+    });
+    bridge.onUnreadChanged(setUnread);
+    bridge.onSettingsForceClose(() => setSettingsOpen(false));
+  }, []);
+
+  function open(index: number, surface: Surface) {
+    if (settingsOpen) setSettingsOpen(false);
+    setActive({ index, surface });
+    window.desktop?.switchSurface(index, surface);
+  }
+  function redetect() {
+    if (settingsOpen) setSettingsOpen(false);
+    window.desktop?.redetect();
+  }
   function openSettings() {
     setSettingsOpen(true);
     window.desktop?.toggleSettings(true);
@@ -46,64 +63,53 @@ export default function Sidebar() {
     window.desktop?.toggleSettings(false);
   }
 
-  useEffect(() => {
-    const bridge = window.desktop;
-    if (!bridge) return;
-    bridge.listAccounts().then((list) => {
-      setAccounts(list);
-      setActive(list[0]?.id ?? null);
-    });
-    bridge.onAccountsChanged(setAccounts);
-    bridge.onUnreadChanged(setUnread);
-    bridge.onSettingsForceClose(() => setSettingsOpen(false));
-  }, []);
-
-  function select(id: string) {
-    // Close settings first: switching un-hides the Gmail view, which would
-    // otherwise paint over the still-open panel.
-    if (settingsOpen) setSettingsOpen(false);
-    setActive(id);
-    window.desktop?.switchAccount(id);
-  }
-
-  async function addAccount() {
-    const created = await window.desktop?.addAccount({ label: 'Account', color: '#4285F4' });
-    if (created) select(created.id);
-  }
-
   return (
     <div className="flex h-screen w-full bg-neutral-900">
-      <nav className="flex w-16 shrink-0 flex-col items-center gap-3 bg-neutral-950 py-3">
-        {accounts.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => select(a.id)}
-            title={a.email || a.label}
-            className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition ${
-              active === a.id ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'
-            }`}
-            style={{ backgroundColor: a.color }}
-          >
-            {a.avatarUrl ? (
-              <img
-                src={a.avatarUrl}
-                alt={a.email || a.label}
-                referrerPolicy="no-referrer"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              (a.label || 'A').charAt(0).toUpperCase()
-            )}
-            {(unread[a.id] ?? 0) > 0 && (
-              <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-[18px] text-white">
-                {unread[a.id]}
-              </span>
-            )}
-          </button>
-        ))}
+      <nav className="flex w-16 shrink-0 flex-col items-center gap-2 bg-neutral-950 py-3">
+        {profiles.map((p) => {
+          const mailActive = active?.index === p.index && active.surface === 'mail';
+          const calActive = active?.index === p.index && active.surface === 'calendar';
+          return (
+            <div key={p.index} className="flex flex-col items-center gap-1">
+              <button
+                onClick={() => open(p.index, 'mail')}
+                title={p.email}
+                className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition ${
+                  mailActive ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'
+                }`}
+                style={{ backgroundColor: p.color }}
+              >
+                {p.avatarUrl ? (
+                  <img
+                    src={p.avatarUrl}
+                    alt={p.email}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  (p.name || p.email || 'A').charAt(0).toUpperCase()
+                )}
+                {unread[p.index] > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-[18px] text-white">
+                    {unread[p.index]}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => open(p.index, 'calendar')}
+                title={`${p.email} — Calendar`}
+                className={`flex h-5 w-10 items-center justify-center rounded text-[13px] leading-none transition ${
+                  calActive ? 'text-white' : 'text-neutral-500 hover:text-neutral-200'
+                }`}
+              >
+                📅
+              </button>
+            </div>
+          );
+        })}
         <button
-          onClick={addAccount}
-          title="Add account"
+          onClick={redetect}
+          title="Detect accounts"
           className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800 text-xl text-neutral-300 hover:bg-neutral-700"
         >
           +
@@ -119,11 +125,7 @@ export default function Sidebar() {
         </div>
       </nav>
       {settingsOpen && (
-        <SettingsPanel
-          accounts={accounts}
-          onClose={closeSettings}
-          onChanged={(list) => setAccounts(list)}
-        />
+        <SettingsPanel profiles={profiles} onClose={closeSettings} onRedetect={redetect} />
       )}
     </div>
   );
