@@ -59,6 +59,9 @@ export default function Sidebar() {
   }, []);
 
   function select(id: string) {
+    // Close settings first: switching un-hides the Gmail view, which would
+    // otherwise paint over the still-open panel.
+    if (settingsOpen) setSettingsOpen(false);
     setActive(id);
     window.desktop?.switchAccount(id);
   }
