@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, ipcMain } from 'electron';
+import { app, BrowserWindow, protocol, net, ipcMain, session } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
@@ -6,13 +6,18 @@ import { ProfileViewManager, type Profile, type Surface } from './profile-view-m
 import { ColorStore } from './color-store';
 import { colorForIndex } from './palette';
 import { planNext } from './detection-planner';
+import { addAccountUrl } from './google-urls';
 import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
+import { autoUpdater } from 'electron-updater';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
 const SIDEBAR_PRELOAD_PATH = join(__dirname, 'sidebar-preload.js');
+// Bundled app icon. Resolves to <project>/assets/icon.png in dev and to
+// app.asar/assets/icon.png when packaged (assets/** is in electron-builder files).
+const ICON_PATH = join(app.getAppPath(), 'assets', 'icon.png');
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 const PROBE_TIMEOUT_MS = 16000; // > preload identity poll window (~15s) so slow accounts aren't missed
 
@@ -23,11 +28,17 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
 
+const SESSION_PARTITION = 'persist:google';
+
 const profiles: Profile[] = [];
 const seenEmails = new Set<string>();
 const unreadCounts: Record<number, number> = {};
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 let probingIndex: number | null = null;
+// Index of a *visible* probe (the "+ add account" flow) awaiting identity, vs
+// the hidden auto-detect probes. Lets us keep a freshly added account on screen
+// and restore a real view if the add is cancelled/duplicate.
+let visibleProbe: number | null = null;
 let detectionStarted = false;
 
 protocol.registerSchemesAsPrivileged([
@@ -86,8 +97,19 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
     profiles.push({ index, email: identity.email, name: identity.name, avatarUrl: identity.avatarUrl, color });
     profiles.sort((a, b) => a.index - b.index);
     pushProfiles();
+    if (visibleProbe === index) {
+      // A freshly added account (via the "+" flow): keep it on screen.
+      switchSurface(index, 'mail');
+      visibleProbe = null;
+    }
   } else if (index > 0) {
     manager?.discardView(index, 'mail'); // duplicate/empty probe view
+    if (visibleProbe === index) {
+      // Add cancelled or a duplicate account: fall back to a real view so the
+      // user isn't left staring at a torn-down blank surface.
+      visibleProbe = null;
+      if (profiles[0]) switchSurface(profiles[0].index, 'mail');
+    }
   }
   if (!decision.stop) probe(index + 1);
 }
@@ -111,11 +133,26 @@ function redetect(): void {
   probe(maxIndex + 1);
 }
 
+function addAccount(): void {
+  // Unlike redetect (hidden probe), open Google's add-session flow in a *visible*
+  // view so the user can sign into a brand-new account. onIdentity registers it
+  // once Gmail loads. No discard timer here — signing in can take a while.
+  clearProbeTimer();
+  if (probingIndex !== null && !profiles.some((p) => p.index === probingIndex)) {
+    manager?.discardView(probingIndex, 'mail');
+  }
+  const nextIndex = profiles.length ? Math.max(...profiles.map((p) => p.index)) + 1 : 0;
+  probingIndex = nextIndex;
+  visibleProbe = nextIndex;
+  manager?.ensureView(nextIndex, 'mail', true, addAccountUrl());
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 820,
     backgroundColor: '#0a0a0a',
+    icon: ICON_PATH,
     webPreferences: { preload: SIDEBAR_PRELOAD_PATH, contextIsolation: true },
   });
   colors = new ColorStore(join(app.getPath('userData'), 'colors.json'));
@@ -157,11 +194,24 @@ function createWindow(): void {
   });
 }
 
+function setupNotifications(): void {
+  // Windows shows/attributes native notifications by AppUserModelID; without it
+  // Gmail's desktop notifications silently don't appear.
+  if (process.platform === 'win32') app.setAppUserModelId('com.gmaildesktop.app');
+  // Grant notification (and related) permissions for the shared Google session.
+  // Only trusted Google domains ever load in these views, so a blanket grant is
+  // safe here and is what lets Gmail's HTML5 notifications actually fire.
+  const ses = session.fromPartition(SESSION_PARTITION);
+  ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(true));
+  ses.setPermissionCheckHandler(() => true);
+}
+
 function registerIpc(): void {
   ipcMain.on(IPC.SWITCH_SURFACE, (_e, arg: { index: number; surface: Surface }) =>
     switchSurface(arg.index, arg.surface),
   );
   ipcMain.on(IPC.REDETECT, () => redetect());
+  ipcMain.on(IPC.ADD_ACCOUNT, () => addAccount());
   ipcMain.on(IPC.SET_COLOR, (_e, arg: { email: string; color: string }) => {
     colors!.set(arg.email, arg.color);
     const p = profiles.find((x) => x.email === arg.email);
@@ -177,11 +227,27 @@ function registerIpc(): void {
   });
 }
 
+// Single-instance: closing the window keeps the process alive in the tray, so a
+// second launch must focus the existing window instead of starting a duplicate.
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(() => {
+  if (!gotTheLock) return; // a primary instance is already running
   registerAppProtocol();
+  setupNotifications();
   registerIpc();
   createWindow();
-  tray = createTray({
+  tray = createTray(ICON_PATH, {
     onOpen: () => mainWindow?.show(),
     onQuit: () => {
       isQuitting = true;
@@ -192,6 +258,12 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  // Auto-update from GitHub Releases (packaged builds only; no-op in dev).
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('Auto-update check failed:', err);
+    });
+  }
 });
 
 app.on('window-all-closed', () => {

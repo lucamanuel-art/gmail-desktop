@@ -1,6 +1,6 @@
 {
   "name": "gmail-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Cross-platform desktop wrapper for Gmail",
   "author": "Luca Manuel <luca.manuel@abovomaxlead.nl>",
@@ -17,12 +17,14 @@
     "build:main": "esbuild electron/main.ts electron/preload.ts electron/sidebar-preload.ts --bundle --platform=node --target=node22 --external:electron --outdir=dist-electron --format=cjs",
     "build": "npm run build:renderer && npm run build:main",
     "start": "electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
+    "electron-updater": "^6.3.9",
     "esbuild": "^0.21.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"

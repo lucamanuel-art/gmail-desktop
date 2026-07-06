@@ -5,16 +5,24 @@ directories:
 files:
   - dist-electron/**/*
   - renderer/out/**/*
+  - assets/**/*
   - package.json
+publish:
+  provider: github
+  owner: lucamanuel-art
+  repo: gmail-desktop
 linux:
   target:
     - AppImage
     - deb
   category: Network
+  icon: build/icon.png
 win:
   target:
     - nsis
+  icon: build/icon.png
 mac:
   target:
     - dmg
   category: public.app-category.productivity
+  icon: build/icon.png

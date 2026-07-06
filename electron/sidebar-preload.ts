@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('desktop', {
   switchSurface: (index: number, surface: Surface): void =>
     ipcRenderer.send(IPC.SWITCH_SURFACE, { index, surface }),
   redetect: (): void => ipcRenderer.send(IPC.REDETECT),
+  addAccount: (): void => ipcRenderer.send(IPC.ADD_ACCOUNT),
   setColor: (email: string, color: string): void =>
     ipcRenderer.send(IPC.SET_COLOR, { email, color }),
   toggleSettings: (open: boolean): void => ipcRenderer.send(IPC.SETTINGS_TOGGLE, { open }),

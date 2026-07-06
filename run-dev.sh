@@ -27,6 +27,17 @@ fi
 echo "› Bundling Electron main/preload…"
 npm run build:main
 
+# 2b. Ensure a desktop-notification daemon is running. WSL/WSLg and minimal
+# Linux setups ship none, so Gmail's HTML5 notifications would silently go
+# nowhere (Notification.isSupported() is false without one). Best-effort: only
+# if dunst is installed and nothing is already handling notifications.
+if [ "$(uname)" = "Linux" ] && command -v dunst >/dev/null 2>&1; then
+  if ! pgrep -x dunst >/dev/null 2>&1; then
+    echo "› Starting dunst notification daemon…"
+    dunst >/dev/null 2>&1 &
+  fi
+fi
+
 # 3. Start the Next.js dev server in the background.
 # Run from inside renderer/ so Next picks up renderer's postcss/tailwind config
 # and Tailwind's content globs resolve against the renderer directory.

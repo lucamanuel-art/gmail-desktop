@@ -68,7 +68,13 @@ if (typeof document !== 'undefined') {
         n.addEventListener('click', () => ipcRenderer.send(IPC.NOTIFICATION_ACTIVATE));
         return n;
       } as unknown as typeof Notification;
-      (Wrapped as unknown as { permission: NotificationPermission }).permission = Original.permission;
+      // Delegate `permission` live via a getter — copying it once freezes it at
+      // 'default', so Gmail would think notifications are disabled forever and
+      // never fire one. The getter always reflects the real granted state.
+      Object.defineProperty(Wrapped, 'permission', {
+        configurable: true,
+        get: () => Original.permission,
+      });
       Wrapped.requestPermission = Original.requestPermission.bind(Original);
       window.Notification = Wrapped;
     }

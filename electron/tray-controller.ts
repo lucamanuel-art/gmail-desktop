@@ -7,10 +7,16 @@ export function shouldHideOnClose(state: {
   return !state.isQuitting;
 }
 
-export function createTray(opts: { onOpen: () => void; onQuit: () => void }): Tray {
+export function createTray(
+  iconPath: string,
+  opts: { onOpen: () => void; onQuit: () => void },
+): Tray {
   const { Tray, Menu, nativeImage } = require('electron') as typeof import('electron');
-  // Empty image => platform default tray icon; a real icon can be added later.
-  const tray = new Tray(nativeImage.createEmpty());
+  // Load the app logo and scale it down to a crisp tray size. Fall back to an
+  // empty (platform-default) image if the icon can't be read.
+  let image = nativeImage.createFromPath(iconPath);
+  if (!image.isEmpty()) image = image.resize({ width: 32, height: 32 });
+  const tray = new Tray(image);
   tray.setToolTip('Gmail Desktop');
   tray.setContextMenu(
     Menu.buildFromTemplate([

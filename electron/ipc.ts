@@ -7,6 +7,7 @@ export const IPC = {
   // renderer (sidebar) -> main
   SWITCH_SURFACE: 'switch:surface', // send({index, surface:'mail'|'calendar'})
   REDETECT: 'accounts:redetect', // send()
+  ADD_ACCOUNT: 'accounts:add', // send() — open Google's add-session flow in a visible view
   SET_COLOR: 'color:set', // send({email, color})
   SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
   // main -> renderer (sidebar)

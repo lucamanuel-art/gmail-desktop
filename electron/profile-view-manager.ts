@@ -33,7 +33,7 @@ export class ProfileViewManager {
     this.win.on('resize', () => this.relayout());
   }
 
-  ensureView(index: number, surface: Surface, visible: boolean): void {
+  ensureView(index: number, surface: Surface, visible: boolean, urlOverride?: string): void {
     const k = key(index, surface);
     if (this.views.has(k)) {
       if (visible) this.show(index, surface);
@@ -53,7 +53,9 @@ export class ProfileViewManager {
         else if (channel === IPC.ACCOUNT_IDENTITY) this.onIdentity(index, args[0]);
       });
     }
-    void view.webContents.loadURL(surface === 'mail' ? mailUrl(index) : calendarUrl(index));
+    void view.webContents.loadURL(
+      urlOverride ?? (surface === 'mail' ? mailUrl(index) : calendarUrl(index)),
+    );
     this.win.contentView.addChildView(view);
     view.setVisible(false);
     this.views.set(k, view);
