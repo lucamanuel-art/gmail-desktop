@@ -53,8 +53,9 @@ export class AccountViewManager {
       event.preventDefault();
       if (!result.inject) return;
       for (const ev of toSendInputEvents(result.inject, process.platform)) {
-        view.webContents.sendInputEvent({ type: 'keyDown', keyCode: ev.keyCode, modifiers: ev.modifiers as Electron.MouseInputEvent['modifiers'] });
-        view.webContents.sendInputEvent({ type: 'keyUp', keyCode: ev.keyCode, modifiers: ev.modifiers as Electron.MouseInputEvent['modifiers'] });
+        const modifiers = ev.modifiers as Electron.KeyboardInputEvent['modifiers'];
+        view.webContents.sendInputEvent({ type: 'keyDown', keyCode: ev.keyCode, modifiers });
+        view.webContents.sendInputEvent({ type: 'keyUp', keyCode: ev.keyCode, modifiers });
       }
     });
     void view.webContents.loadURL(GMAIL_URL);

@@ -58,9 +58,14 @@ export function SettingsPanel({
       <div className="mb-8 flex flex-col gap-3">
         {accounts.map((a) => (
           <div key={a.id} className="flex items-center gap-3 rounded bg-neutral-800 p-3">
-            <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full" style={{ backgroundColor: a.color }}>
-              {a.avatarUrl && (
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-white"
+              style={{ backgroundColor: a.color }}
+            >
+              {a.avatarUrl ? (
                 <img src={a.avatarUrl} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+              ) : (
+                (a.label || 'A').charAt(0).toUpperCase()
               )}
             </span>
             <input

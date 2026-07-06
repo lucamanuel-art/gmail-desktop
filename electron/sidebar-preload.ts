@@ -5,6 +5,9 @@ interface Account {
   id: string;
   label: string;
   color: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
 }
 
 contextBridge.exposeInMainWorld('desktop', {
