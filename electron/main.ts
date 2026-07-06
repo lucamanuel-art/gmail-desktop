@@ -1,4 +1,5 @@
 import { app, BrowserWindow, protocol, net, ipcMain } from 'electron';
+import type { Tray } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AccountsStore, type Account } from './accounts-store';
@@ -6,6 +7,7 @@ import { AccountViewManager } from './account-view-manager';
 import { totalUnread } from './badge-math';
 import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
+import { shouldHideOnClose, createTray } from './tray-controller';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -15,6 +17,8 @@ const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 let mainWindow: BrowserWindow | null = null;
 let manager: AccountViewManager | null = null;
 let store: AccountsStore | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 const unreadCounts: Record<string, number> = {};
 
 protocol.registerSchemesAsPrivileged([
@@ -69,6 +73,13 @@ function createWindow(): void {
 
   if (DEV_URL) void mainWindow.loadURL(DEV_URL);
   else void mainWindow.loadURL('app://bundle/');
+
+  mainWindow.on('close', (e) => {
+    if (shouldHideOnClose({ isQuitting, platform: process.platform })) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 }
 
 function registerIpc(): void {
@@ -93,13 +104,25 @@ app.whenReady().then(() => {
   registerAppProtocol();
   registerIpc();
   createWindow();
+  tray = createTray({
+    onOpen: () => mainWindow?.show(),
+    onQuit: () => {
+      isQuitting = true;
+      app.quit();
+    },
+  });
+  void tray; // retained for lifetime of the app
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Intentionally left running in the tray; quit only via the tray menu.
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 export { totalUnread };
