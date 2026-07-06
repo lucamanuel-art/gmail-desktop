@@ -17,6 +17,7 @@ interface DesktopBridge {
   onUnreadChanged(cb: (counts: Record<number, number>) => void): void;
   switchSurface(index: number, surface: Surface): void;
   redetect(): void;
+  addAccount(): void;
   setColor(email: string, color: string): void;
   toggleSettings(open: boolean): void;
   onSettingsForceClose(cb: () => void): void;
@@ -28,11 +29,66 @@ declare global {
   }
 }
 
+function initial(p: Profile): string {
+  return (p.name || p.email || '?').trim().charAt(0).toUpperCase() || '?';
+}
+
+function CalendarIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+      <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
+    </svg>
+  );
+}
+
+function PlusIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function GearIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 export default function Sidebar() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [unread, setUnread] = useState<Record<number, number>>({});
   const [active, setActive] = useState<{ index: number; surface: Surface } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -54,6 +110,10 @@ export default function Sidebar() {
     setActive({ index, surface });
     window.desktop?.switchSurface(index, surface);
   }
+  function addAccount() {
+    if (settingsOpen) setSettingsOpen(false);
+    window.desktop?.addAccount();
+  }
   function redetect() {
     if (settingsOpen) setSettingsOpen(false);
     window.desktop?.redetect();
@@ -68,66 +128,84 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-neutral-900">
-      <nav className="flex w-16 shrink-0 flex-col items-center gap-2 bg-neutral-950 py-3">
+    <div className="flex h-screen w-full bg-neutral-950 text-neutral-200">
+      <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 py-4">
         {profiles.map((p) => {
           const mailActive = active?.index === p.index && active.surface === 'mail';
           const calActive = active?.index === p.index && active.surface === 'calendar';
+          const showImg = p.avatarUrl && !brokenAvatars[p.avatarUrl];
+          const count = unread[p.index] ?? 0;
           return (
-            <div key={p.index} className="flex flex-col items-center gap-1">
+            <div key={p.index} className="flex flex-col items-center gap-1.5">
               <button
                 onClick={() => open(p.index, 'mail')}
-                title={p.email}
-                className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition ${
-                  mailActive ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'
+                title={p.email || p.name}
+                className={`group relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition-all duration-150 ${
+                  mailActive
+                    ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-950'
+                    : 'opacity-85 hover:opacity-100 hover:ring-2 hover:ring-white/40'
                 }`}
                 style={{ backgroundColor: p.color }}
               >
-                {p.avatarUrl ? (
+                {showImg ? (
                   <img
                     src={p.avatarUrl}
-                    alt={p.email}
+                    alt=""
                     referrerPolicy="no-referrer"
+                    onError={() =>
+                      setBrokenAvatars((b) => ({ ...b, [p.avatarUrl]: true }))
+                    }
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  (p.name || p.email || 'A').charAt(0).toUpperCase()
+                  initial(p)
                 )}
-                {(unread[p.index] ?? 0) > 0 && (
-                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-[18px] text-white">
-                    {unread[p.index]}
+                {count > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-neutral-950">
+                    {count > 99 ? '99+' : count}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => open(p.index, 'calendar')}
-                title={`${p.email} — Calendar`}
-                className={`flex h-5 w-10 items-center justify-center rounded text-[13px] leading-none transition ${
-                  calActive ? 'text-white' : 'text-neutral-500 hover:text-neutral-200'
+                title={`${p.email || p.name} — Calendar`}
+                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
+                  calActive
+                    ? 'bg-white/15 text-white'
+                    : 'text-neutral-500 hover:bg-white/10 hover:text-neutral-200'
                 }`}
               >
-                📅
+                <CalendarIcon className="h-4 w-4" />
               </button>
             </div>
           );
         })}
+
+        <div className="my-1 h-px w-8 shrink-0 bg-white/10" />
+
         <button
-          onClick={redetect}
-          title="Detect accounts"
-          className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800 text-xl text-neutral-300 hover:bg-neutral-700"
+          onClick={addAccount}
+          title="Add account"
+          className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-white/20 text-neutral-400 transition hover:border-white/40 hover:text-white"
         >
-          +
+          <PlusIcon className="h-5 w-5" />
         </button>
+
         <div className="mt-auto">
           <button
             onClick={openSettings}
             title="Settings"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-xl text-neutral-400 hover:text-white"
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
+              settingsOpen
+                ? 'bg-white/15 text-white'
+                : 'text-neutral-500 hover:bg-white/10 hover:text-white'
+            }`}
           >
-            ⚙
+            <GearIcon className="h-5 w-5" />
           </button>
         </div>
       </nav>
+
       {settingsOpen && (
         <SettingsPanel profiles={profiles} onClose={closeSettings} onRedetect={redetect} />
       )}

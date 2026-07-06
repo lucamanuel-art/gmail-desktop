@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { contentBounds, SIDEBAR_WIDTH } from '../electron/layout';
+import { contentBounds, SIDEBAR_WIDTH, CONTENT_MARGIN } from '../electron/layout';
 
 describe('contentBounds', () => {
-  it('offsets content by the sidebar width', () => {
+  it('insets content past the sidebar and by the frame margin', () => {
     expect(contentBounds({ width: 1000, height: 800 })).toEqual({
-      x: SIDEBAR_WIDTH,
-      y: 0,
-      width: 1000 - SIDEBAR_WIDTH,
-      height: 800,
+      x: SIDEBAR_WIDTH + CONTENT_MARGIN,
+      y: CONTENT_MARGIN,
+      width: 1000 - SIDEBAR_WIDTH - CONTENT_MARGIN * 2,
+      height: 800 - CONTENT_MARGIN * 2,
     });
   });
   it('never returns a negative width', () => {
