@@ -26,7 +26,6 @@ let settingsPanelOpen = false;
 const profiles: Profile[] = [];
 const seenEmails = new Set<string>();
 const unreadCounts: Record<number, number> = {};
-let active: { index: number; surface: Surface } | null = null;
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 let probingIndex: number | null = null;
 let detectionStarted = false;
@@ -61,12 +60,16 @@ function probe(index: number): void {
   probingIndex = index;
   manager?.ensureView(index, 'mail', false); // hidden probe; identity arrives via onIdentity
   clearProbeTimer();
-  probeTimer = setTimeout(() => {
-    // No identity within the timeout: no account at this index. Discard and stop.
-    manager?.discardView(index, 'mail');
-    probeTimer = null;
-    probingIndex = null;
-  }, PROBE_TIMEOUT_MS);
+  // Never auto-discard index 0: it is the visible primary/login view and may take
+  // arbitrarily long to sign in. Only forward probes (1+) get the discard timeout.
+  if (index > 0) {
+    probeTimer = setTimeout(() => {
+      // No identity within the timeout: no account at this index. Discard and stop.
+      manager?.discardView(index, 'mail');
+      probeTimer = null;
+      probingIndex = null;
+    }, PROBE_TIMEOUT_MS);
+  }
 }
 
 function onIdentity(index: number, identity: { email: string; name: string; avatarUrl: string }): void {
@@ -90,7 +93,6 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
 }
 
 function switchSurface(index: number, surface: Surface): void {
-  active = { index, surface };
   manager?.show(index, surface);
 }
 
