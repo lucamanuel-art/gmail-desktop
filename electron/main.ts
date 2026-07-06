@@ -1,10 +1,11 @@
 import { app, BrowserWindow, protocol, net, ipcMain } from 'electron';
-import type { Tray } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { AccountsStore, type Account } from './accounts-store';
-import { AccountViewManager } from './account-view-manager';
-import { applyBadge } from './badge-controller';
+import type { Tray } from 'electron';
+import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
+import { ColorStore } from './color-store';
+import { colorForIndex } from './palette';
+import { planNext } from './detection-planner';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
 
@@ -12,14 +13,20 @@ const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
 const SIDEBAR_PRELOAD_PATH = join(__dirname, 'sidebar-preload.js');
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
+const PROBE_TIMEOUT_MS = 8000;
 
 let mainWindow: BrowserWindow | null = null;
-let manager: AccountViewManager | null = null;
-let store: AccountsStore | null = null;
+let manager: ProfileViewManager | null = null;
+let colors: ColorStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
-const unreadCounts: Record<string, number> = {};
+
+const profiles: Profile[] = [];
+const seenEmails = new Set<string>();
+const unreadCounts: Record<number, number> = {};
+let active: { index: number; surface: Surface } | null = null;
+let probeTimer: ReturnType<typeof setTimeout> | null = null;
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -33,24 +40,58 @@ function registerAppProtocol(): void {
   });
 }
 
+function pushProfiles(): void {
+  mainWindow?.webContents.send(IPC.PROFILES_CHANGED, [...profiles]);
+}
 function pushUnread(): void {
   mainWindow?.webContents.send(IPC.UNREAD_CHANGED, { ...unreadCounts });
 }
 
-function pushAccounts(): void {
-  mainWindow?.webContents.send(IPC.ACCOUNTS_CHANGED, store?.list() ?? []);
+function clearProbeTimer(): void {
+  if (probeTimer) {
+    clearTimeout(probeTimer);
+    probeTimer = null;
+  }
 }
 
-function activate(accountId: string): void {
-  mainWindow?.show();
-  // A notification click pulls the user to this account; if the settings panel
-  // is open, close it first so the un-hidden Gmail view can't paint over it.
-  if (settingsPanelOpen) {
-    settingsPanelOpen = false;
-    mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
+function probe(index: number): void {
+  manager?.ensureView(index, 'mail', false); // hidden probe; identity arrives via onIdentity
+  clearProbeTimer();
+  probeTimer = setTimeout(() => {
+    // No identity within the timeout: no account at this index. Discard and stop.
+    manager?.discardView(index, 'mail');
+    probeTimer = null;
+  }, PROBE_TIMEOUT_MS);
+}
+
+function onIdentity(index: number, identity: { email: string; name: string; avatarUrl: string }): void {
+  const decision = planNext([...seenEmails], index, identity);
+  clearProbeTimer();
+  if (decision.register && identity.email && !profiles.some((p) => p.index === index)) {
+    seenEmails.add(identity.email);
+    const color = colors!.get(identity.email) ?? colorForIndex(index);
+    profiles.push({ index, email: identity.email, name: identity.name, avatarUrl: identity.avatarUrl, color });
+    profiles.sort((a, b) => a.index - b.index);
+    pushProfiles();
+  } else if (!decision.register && index > 0 && !profiles.some((p) => p.index === index)) {
+    manager?.discardView(index, 'mail'); // duplicate/empty probe view
   }
-  manager?.show(accountId);
-  mainWindow?.webContents.send(IPC.ACCOUNTS_CHANGED, store?.list() ?? []);
+  if (!decision.stop) probe(index + 1);
+}
+
+function switchSurface(index: number, surface: Surface): void {
+  active = { index, surface };
+  manager?.show(index, surface);
+}
+
+function startDetection(): void {
+  switchSurface(0, 'mail'); // visible; user logs in; onIdentity(0,...) drives the rest
+}
+
+function redetect(): void {
+  clearProbeTimer();
+  const maxIndex = profiles.length ? Math.max(...profiles.map((p) => p.index)) : -1;
+  probe(maxIndex + 1);
 }
 
 function createWindow(): void {
@@ -60,32 +101,32 @@ function createWindow(): void {
     backgroundColor: '#0a0a0a',
     webPreferences: { preload: SIDEBAR_PRELOAD_PATH, contextIsolation: true },
   });
-
-  store = new AccountsStore(join(app.getPath('userData'), 'accounts.json'));
-  manager = new AccountViewManager(
+  colors = new ColorStore(join(app.getPath('userData'), 'colors.json'));
+  manager = new ProfileViewManager(
     mainWindow,
     PRELOAD_PATH,
-    (accountId, count) => {
-      unreadCounts[accountId] = count;
+    (index, count) => {
+      unreadCounts[index] = count;
       pushUnread();
-      applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
     },
-    (accountId) => activate(accountId),
-    (accountId, identity) => {
-      const patch: { email: string; name: string; avatarUrl: string; label?: string } = { ...identity };
-      const existing = store!.list().find((a) => a.id === accountId);
-      if (existing && (existing.label === 'Account' || !existing.label)) patch.label = identity.email || existing.label;
-      store!.update(accountId, patch);
-      pushAccounts();
+    (index) => {
+      mainWindow?.show();
+      if (settingsPanelOpen) {
+        settingsPanelOpen = false;
+        mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
+      }
+      switchSurface(index, 'mail');
     },
+    (index, identity) => onIdentity(index, identity),
   );
-
-  for (const account of store.list()) manager.ensureView(account);
-  const first = store.list()[0];
-  if (first) manager.show(first.id);
 
   if (DEV_URL) void mainWindow.loadURL(DEV_URL);
   else void mainWindow.loadURL('app://bundle/');
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    pushProfiles();
+    startDetection();
+  });
 
   mainWindow.on('close', (e) => {
     if (shouldHideOnClose({ isQuitting, platform: process.platform })) {
@@ -96,25 +137,17 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle(IPC.ACCOUNTS_LIST, () => store?.list() ?? []);
-  ipcMain.handle(IPC.ACCOUNTS_ADD, (_e, input: { label: string; color: string }) => {
-    const account = store!.add(input) as Account;
-    manager!.ensureView(account);
-    pushAccounts();
-    return account;
-  });
-  ipcMain.handle(IPC.ACCOUNTS_REMOVE, (_e, id: string) => {
-    manager!.removeView(id);
-    store!.remove(id);
-    delete unreadCounts[id];
-    pushAccounts();
-    pushUnread();
-  });
-  ipcMain.on(IPC.ACCOUNTS_SWITCH, (_e, id: string) => manager?.show(id));
-  ipcMain.handle(IPC.ACCOUNTS_UPDATE, (_e, id: string, patch: { label?: string; color?: string }) => {
-    const updated = store!.update(id, patch);
-    pushAccounts();
-    return updated;
+  ipcMain.on(IPC.SWITCH_SURFACE, (_e, arg: { index: number; surface: Surface }) =>
+    switchSurface(arg.index, arg.surface),
+  );
+  ipcMain.on(IPC.REDETECT, () => redetect());
+  ipcMain.on(IPC.SET_COLOR, (_e, arg: { email: string; color: string }) => {
+    colors!.set(arg.email, arg.color);
+    const p = profiles.find((x) => x.email === arg.email);
+    if (p) {
+      p.color = arg.color;
+      pushProfiles();
+    }
   });
   ipcMain.on(IPC.SETTINGS_TOGGLE, (_e, arg: { open: boolean }) => {
     settingsPanelOpen = arg.open;
@@ -134,16 +167,15 @@ app.whenReady().then(() => {
       app.quit();
     },
   });
-  void tray; // retained for lifetime of the app
+  void tray;
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  // Intentionally left running in the tray; quit only via the tray menu.
+  // Kept running in the tray; quit only via the tray menu.
 });
-
 app.on('before-quit', () => {
   isQuitting = true;
 });

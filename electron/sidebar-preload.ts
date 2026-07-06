@@ -1,29 +1,27 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from './ipc';
 
-interface Account {
-  id: string;
-  label: string;
+interface Profile {
+  index: number;
+  email: string;
+  name: string;
+  avatarUrl: string;
   color: string;
-  email?: string;
-  name?: string;
-  avatarUrl?: string;
 }
+type Surface = 'mail' | 'calendar';
 
 contextBridge.exposeInMainWorld('desktop', {
-  listAccounts: (): Promise<Account[]> => ipcRenderer.invoke(IPC.ACCOUNTS_LIST),
-  addAccount: (input: { label: string; color: string }): Promise<Account> =>
-    ipcRenderer.invoke(IPC.ACCOUNTS_ADD, input),
-  removeAccount: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ACCOUNTS_REMOVE, id),
-  switchAccount: (id: string): void => ipcRenderer.send(IPC.ACCOUNTS_SWITCH, id),
-  onAccountsChanged: (cb: (accounts: Account[]) => void): void => {
-    ipcRenderer.on(IPC.ACCOUNTS_CHANGED, (_e, accounts) => cb(accounts));
+  onProfilesChanged: (cb: (profiles: Profile[]) => void): void => {
+    ipcRenderer.on(IPC.PROFILES_CHANGED, (_e, profiles) => cb(profiles));
   },
-  onUnreadChanged: (cb: (counts: Record<string, number>) => void): void => {
+  onUnreadChanged: (cb: (counts: Record<number, number>) => void): void => {
     ipcRenderer.on(IPC.UNREAD_CHANGED, (_e, counts) => cb(counts));
   },
-  updateAccount: (id: string, patch: { label?: string; color?: string }): Promise<Account | null> =>
-    ipcRenderer.invoke(IPC.ACCOUNTS_UPDATE, id, patch),
+  switchSurface: (index: number, surface: Surface): void =>
+    ipcRenderer.send(IPC.SWITCH_SURFACE, { index, surface }),
+  redetect: (): void => ipcRenderer.send(IPC.REDETECT),
+  setColor: (email: string, color: string): void =>
+    ipcRenderer.send(IPC.SET_COLOR, { email, color }),
   toggleSettings: (open: boolean): void => ipcRenderer.send(IPC.SETTINGS_TOGGLE, { open }),
   onSettingsForceClose: (cb: () => void): void => {
     ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());
