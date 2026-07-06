@@ -1,0 +1,24 @@
+{
+  "name": "gmail-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-platform desktop wrapper for Gmail",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:renderer": "next build renderer",
+    "build:main": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --target=node20 --external:electron --outdir=dist-electron --format=cjs",
+    "build": "npm run build:renderer && npm run build:main",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}
