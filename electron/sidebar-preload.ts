@@ -5,6 +5,9 @@ interface Account {
   id: string;
   label: string;
   color: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
 }
 
 contextBridge.exposeInMainWorld('desktop', {
@@ -18,5 +21,14 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   onUnreadChanged: (cb: (counts: Record<string, number>) => void): void => {
     ipcRenderer.on(IPC.UNREAD_CHANGED, (_e, counts) => cb(counts));
+  },
+  updateAccount: (id: string, patch: { label?: string; color?: string }): Promise<Account | null> =>
+    ipcRenderer.invoke(IPC.ACCOUNTS_UPDATE, id, patch),
+  toggleSettings: (open: boolean): void => ipcRenderer.send(IPC.SETTINGS_TOGGLE, { open }),
+  getSettings: (): Promise<{ outlookShortcuts: boolean }> => ipcRenderer.invoke(IPC.SETTINGS_GET),
+  setSettings: (patch: { outlookShortcuts?: boolean }): Promise<{ outlookShortcuts: boolean }> =>
+    ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
+  onSettingsForceClose: (cb: () => void): void => {
+    ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());
   },
 });

@@ -7,6 +7,8 @@ import { AccountViewManager } from './account-view-manager';
 import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
+import { SettingsStore } from './settings-store';
+import { installMenu } from './menu';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -16,8 +18,10 @@ const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 let mainWindow: BrowserWindow | null = null;
 let manager: AccountViewManager | null = null;
 let store: AccountsStore | null = null;
+let settings: SettingsStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let settingsPanelOpen = false;
 const unreadCounts: Record<string, number> = {};
 
 protocol.registerSchemesAsPrivileged([
@@ -42,6 +46,12 @@ function pushAccounts(): void {
 
 function activate(accountId: string): void {
   mainWindow?.show();
+  // A notification click pulls the user to this account; if the settings panel
+  // is open, close it first so the un-hidden Gmail view can't paint over it.
+  if (settingsPanelOpen) {
+    settingsPanelOpen = false;
+    mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
+  }
   manager?.show(accountId);
   mainWindow?.webContents.send(IPC.ACCOUNTS_CHANGED, store?.list() ?? []);
 }
@@ -55,6 +65,7 @@ function createWindow(): void {
   });
 
   store = new AccountsStore(join(app.getPath('userData'), 'accounts.json'));
+  settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
   manager = new AccountViewManager(
     mainWindow,
     PRELOAD_PATH,
@@ -64,7 +75,15 @@ function createWindow(): void {
       applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
     },
     (accountId) => activate(accountId),
+    (accountId, identity) => {
+      const patch: { email: string; name: string; avatarUrl: string; label?: string } = { ...identity };
+      const existing = store!.list().find((a) => a.id === accountId);
+      if (existing && (existing.label === 'Account' || !existing.label)) patch.label = identity.email || existing.label;
+      store!.update(accountId, patch);
+      pushAccounts();
+    },
   );
+  manager.setShortcutsEnabled(settings.get().outlookShortcuts);
 
   for (const account of store.list()) manager.ensureView(account);
   const first = store.list()[0];
@@ -97,11 +116,28 @@ function registerIpc(): void {
     pushUnread();
   });
   ipcMain.on(IPC.ACCOUNTS_SWITCH, (_e, id: string) => manager?.show(id));
+  ipcMain.handle(IPC.ACCOUNTS_UPDATE, (_e, id: string, patch: { label?: string; color?: string }) => {
+    const updated = store!.update(id, patch);
+    pushAccounts();
+    return updated;
+  });
+  ipcMain.on(IPC.SETTINGS_TOGGLE, (_e, arg: { open: boolean }) => {
+    settingsPanelOpen = arg.open;
+    if (arg.open) manager?.hideAll();
+    else manager?.showActive();
+  });
+  ipcMain.handle(IPC.SETTINGS_GET, () => settings!.get());
+  ipcMain.handle(IPC.SETTINGS_SET, (_e, patch: { outlookShortcuts?: boolean }) => {
+    const next = settings!.set(patch);
+    manager?.setShortcutsEnabled(next.outlookShortcuts);
+    return next;
+  });
 }
 
 app.whenReady().then(() => {
   registerAppProtocol();
   registerIpc();
+  installMenu();
   createWindow();
   tray = createTray({
     onOpen: () => mainWindow?.show(),

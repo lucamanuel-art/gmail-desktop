@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 
+import { SettingsPanel } from './SettingsPanel';
+
 interface Account {
   id: string;
   label: string;
   color: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
 }
 
 // Bridge exposed by the Electron preload for the sidebar (Task 11).
@@ -16,6 +21,11 @@ interface DesktopBridge {
   switchAccount(id: string): void;
   onAccountsChanged(cb: (accounts: Account[]) => void): void;
   onUnreadChanged(cb: (counts: Record<string, number>) => void): void;
+  updateAccount(id: string, patch: { label?: string; color?: string }): Promise<Account | null>;
+  toggleSettings(open: boolean): void;
+  getSettings(): Promise<{ outlookShortcuts: boolean }>;
+  setSettings(patch: { outlookShortcuts?: boolean }): Promise<{ outlookShortcuts: boolean }>;
+  onSettingsForceClose(cb: () => void): void;
 }
 
 declare global {
@@ -28,6 +38,15 @@ export default function Sidebar() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [active, setActive] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  function openSettings() {
+    setSettingsOpen(true);
+    window.desktop?.toggleSettings(true);
+  }
+  function closeSettings() {
+    setSettingsOpen(false);
+    window.desktop?.toggleSettings(false);
+  }
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -38,9 +57,13 @@ export default function Sidebar() {
     });
     bridge.onAccountsChanged(setAccounts);
     bridge.onUnreadChanged(setUnread);
+    bridge.onSettingsForceClose(() => setSettingsOpen(false));
   }, []);
 
   function select(id: string) {
+    // Close settings first: switching un-hides the Gmail view, which would
+    // otherwise paint over the still-open panel.
+    if (settingsOpen) setSettingsOpen(false);
     setActive(id);
     window.desktop?.switchAccount(id);
   }
@@ -57,13 +80,22 @@ export default function Sidebar() {
           <button
             key={a.id}
             onClick={() => select(a.id)}
-            title={a.label}
-            className={`relative flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white transition ${
+            title={a.email || a.label}
+            className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition ${
               active === a.id ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'
             }`}
             style={{ backgroundColor: a.color }}
           >
-            {a.label.charAt(0).toUpperCase()}
+            {a.avatarUrl ? (
+              <img
+                src={a.avatarUrl}
+                alt={a.email || a.label}
+                referrerPolicy="no-referrer"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              (a.label || 'A').charAt(0).toUpperCase()
+            )}
             {(unread[a.id] ?? 0) > 0 && (
               <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-[18px] text-white">
                 {unread[a.id]}
@@ -80,6 +112,7 @@ export default function Sidebar() {
         </button>
         <div className="mt-auto">
           <button
+            onClick={openSettings}
             title="Settings"
             className="flex h-10 w-10 items-center justify-center rounded-full text-xl text-neutral-400 hover:text-white"
           >
@@ -87,6 +120,13 @@ export default function Sidebar() {
           </button>
         </div>
       </nav>
+      {settingsOpen && (
+        <SettingsPanel
+          accounts={accounts}
+          onClose={closeSettings}
+          onChanged={(list) => setAccounts(list)}
+        />
+      )}
     </div>
   );
 }
