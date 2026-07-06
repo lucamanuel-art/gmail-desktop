@@ -9,15 +9,26 @@ export function computeAndReport(
 }
 
 export function extractIdentity(
-  doc: { querySelector(sel: string): any },
+  doc: { querySelectorAll(sel: string): ArrayLike<any> },
 ): { email: string; name: string; avatarUrl: string } | null {
-  const anchor = doc.querySelector('a[aria-label^="Google Account"]');
+  // Locale-independent: the Google account button is an <a> whose aria-label
+  // contains the signed-in email (an @-address) and which holds the avatar <img>.
+  // (The old `aria-label^="Google Account"` match broke for non-English Gmail UIs.)
+  const anchors = Array.from(doc.querySelectorAll('a[aria-label]'));
+  let anchor: any = null;
+  for (const a of anchors) {
+    const lbl: string = a.getAttribute('aria-label') || '';
+    if (/@[^\s@]+\.[^\s@]+/.test(lbl) && a.querySelector('img')) {
+      anchor = a;
+      break;
+    }
+  }
   if (!anchor) return null;
   const label: string = anchor.getAttribute('aria-label') || '';
-  const email = (label.match(/\S+@\S+\.\S+/) || [''])[0].replace(/[()]/g, '');
+  const email = (label.match(/[^\s()]+@[^\s()]+\.[^\s()]+/) || [''])[0];
   const name = label
-    .replace(/^Google Account:?\s*/i, '')
-    .split('(')[0]
+    .replace(/^[^:]*:\s*/, '') // strip any leading "Xxx:" prefix (any language)
+    .replace(/\s*\(.*\)\s*$/, '') // strip trailing "(email)"
     .trim();
   const img = anchor.querySelector('img');
   const avatarUrl: string = (img && img.getAttribute('src')) || '';

@@ -2,17 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { extractIdentity, isEditableTarget } from '../electron/preload';
 
 function fakeDoc(ariaLabel: string | null, imgSrc: string | null) {
-  return {
-    querySelector(sel: string) {
-      if (sel.startsWith('a[')) {
-        if (ariaLabel === null) return null;
-        return {
+  const anchor =
+    ariaLabel === null
+      ? null
+      : {
           getAttribute: (n: string) => (n === 'aria-label' ? ariaLabel : null),
           querySelector: () => (imgSrc === null ? null : { getAttribute: () => imgSrc }),
         };
-      }
-      return null;
-    },
+  return {
+    querySelectorAll: (sel: string) => (sel === 'a[aria-label]' && anchor ? [anchor] : []),
   };
 }
 
@@ -27,6 +25,22 @@ describe('extractIdentity', () => {
       name: 'Ada Lovelace',
       avatarUrl: 'https://lh3.googleusercontent.com/a/pic',
     });
+  });
+  it('handles a localized (Dutch) aria-label', () => {
+    const doc = fakeDoc(
+      'Google-account: Ada Lovelace (ada@gmail.com)',
+      'https://lh3.googleusercontent.com/a/pic',
+    );
+    expect(extractIdentity(doc)).toEqual({
+      email: 'ada@gmail.com',
+      name: 'Ada Lovelace',
+      avatarUrl: 'https://lh3.googleusercontent.com/a/pic',
+    });
+  });
+  it('ignores an aria-label anchor without an email', () => {
+    expect(
+      extractIdentity(fakeDoc('Main menu', 'https://lh3.googleusercontent.com/a/pic')),
+    ).toBeNull();
   });
   it('returns null when the anchor is absent', () => {
     expect(extractIdentity(fakeDoc(null, null))).toBeNull();
