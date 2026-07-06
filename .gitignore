@@ -4,3 +4,4 @@ renderer/out/
 renderer/.next/
 dist/
 *.log
+.claude/
