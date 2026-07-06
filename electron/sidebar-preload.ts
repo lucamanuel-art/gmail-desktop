@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('desktop', {
   addAccount: (): void => ipcRenderer.send(IPC.ADD_ACCOUNT),
   setColor: (email: string, color: string): void =>
     ipcRenderer.send(IPC.SET_COLOR, { email, color }),
+  removeAccount: (email: string): void => ipcRenderer.send(IPC.REMOVE_ACCOUNT, { email }),
   toggleSettings: (open: boolean): void => ipcRenderer.send(IPC.SETTINGS_TOGGLE, { open }),
   onSettingsForceClose: (cb: () => void): void => {
     ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());

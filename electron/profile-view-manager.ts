@@ -72,6 +72,10 @@ export class ProfileViewManager {
     this.applyBounds(view);
   }
 
+  activeIndex(): number | null {
+    return this.activeKey ? Number(this.activeKey.split(':')[0]) : null;
+  }
+
   discardView(index: number, surface: Surface): void {
     const k = key(index, surface);
     const view = this.views.get(k);

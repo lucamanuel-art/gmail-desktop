@@ -19,6 +19,7 @@ interface DesktopBridge {
   redetect(): void;
   addAccount(): void;
   setColor(email: string, color: string): void;
+  removeAccount(email: string): void;
   toggleSettings(open: boolean): void;
   onSettingsForceClose(cb: () => void): void;
 }

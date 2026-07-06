@@ -9,6 +9,7 @@ export const IPC = {
   REDETECT: 'accounts:redetect', // send()
   ADD_ACCOUNT: 'accounts:add', // send() — open Google's add-session flow in a visible view
   SET_COLOR: 'color:set', // send({email, color})
+  REMOVE_ACCOUNT: 'accounts:remove', // send({email}) — hide account + skip on detect
   SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]

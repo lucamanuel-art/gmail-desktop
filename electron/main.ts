@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
 import { ColorStore } from './color-store';
+import { RemovedStore } from './removed-store';
 import { colorForIndex } from './palette';
 import { planNext } from './detection-planner';
 import { addAccountUrl } from './google-urls';
@@ -24,6 +25,7 @@ const PROBE_TIMEOUT_MS = 16000; // > preload identity poll window (~15s) so slow
 let mainWindow: BrowserWindow | null = null;
 let manager: ProfileViewManager | null = null;
 let colors: ColorStore | null = null;
+let removed: RemovedStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
@@ -88,6 +90,24 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
   // preload identity poll on full navigations, which would otherwise abort an in-flight
   // probe timer and spuriously advance/leak views.
   if (profiles.some((p) => p.index === index)) return;
+
+  const email = identity?.email;
+  const isVisibleAdd = visibleProbe === index;
+
+  // Explicit "+"-add of a previously removed account un-hides it again.
+  if (isVisibleAdd && email && removed!.has(email)) removed!.remove(email);
+
+  // A hidden detect/redetect probe that lands on a removed account: skip it but
+  // keep scanning later indexes (authuser indexes are contiguous).
+  if (!isVisibleAdd && email && removed!.has(email)) {
+    clearProbeTimer();
+    probingIndex = null;
+    manager?.discardView(index, 'mail');
+    if (manager?.activeIndex() == null && profiles[0]) switchSurface(profiles[0].index, 'mail');
+    probe(index + 1);
+    return;
+  }
+
   const decision = planNext([...seenEmails], index, identity);
   clearProbeTimer();
   probingIndex = null;
@@ -101,6 +121,10 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
       // A freshly added account (via the "+" flow): keep it on screen.
       switchSurface(index, 'mail');
       visibleProbe = null;
+    } else if (manager?.activeIndex() == null) {
+      // Nothing visible yet (e.g. the primary account was removed/skipped):
+      // surface the first account we successfully register.
+      switchSurface(index, 'mail');
     }
   } else if (index > 0) {
     manager?.discardView(index, 'mail'); // duplicate/empty probe view
@@ -112,6 +136,23 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
     }
   }
   if (!decision.stop) probe(index + 1);
+}
+
+function removeAccount(email: string): void {
+  removed!.add(email); // persist so detection skips it from now on
+  const profile = profiles.find((p) => p.email === email);
+  if (!profile) return;
+  const idx = profile.index;
+  const wasActive = manager?.activeIndex() === idx;
+  profiles.splice(profiles.indexOf(profile), 1);
+  seenEmails.delete(email);
+  delete unreadCounts[idx];
+  manager?.discardView(idx, 'mail');
+  manager?.discardView(idx, 'calendar');
+  pushProfiles();
+  pushUnread();
+  applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
+  if (wasActive && profiles[0]) switchSurface(profiles[0].index, 'mail');
 }
 
 function switchSurface(index: number, surface: Surface): void {
@@ -156,6 +197,7 @@ function createWindow(): void {
     webPreferences: { preload: SIDEBAR_PRELOAD_PATH, contextIsolation: true },
   });
   colors = new ColorStore(join(app.getPath('userData'), 'colors.json'));
+  removed = new RemovedStore(join(app.getPath('userData'), 'removed.json'));
   manager = new ProfileViewManager(
     mainWindow,
     PRELOAD_PATH,
@@ -220,6 +262,7 @@ function registerIpc(): void {
       pushProfiles();
     }
   });
+  ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => removeAccount(arg.email));
   ipcMain.on(IPC.SETTINGS_TOGGLE, (_e, arg: { open: boolean }) => {
     settingsPanelOpen = arg.open;
     if (arg.open) manager?.hideAll();
