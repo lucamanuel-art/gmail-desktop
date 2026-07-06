@@ -138,35 +138,37 @@ export default function Sidebar() {
           const count = unread[p.index] ?? 0;
           return (
             <div key={p.index} className="flex flex-col items-center gap-1.5">
-              <button
-                onClick={() => open(p.index, 'mail')}
-                title={p.email || p.name}
-                className={`group relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition-all duration-150 ${
-                  mailActive
-                    ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-950'
-                    : 'opacity-85 hover:opacity-100 hover:ring-2 hover:ring-white/40'
-                }`}
-                style={{ backgroundColor: p.color }}
-              >
-                {showImg ? (
-                  <img
-                    src={p.avatarUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    onError={() =>
-                      setBrokenAvatars((b) => ({ ...b, [p.avatarUrl]: true }))
-                    }
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  initial(p)
-                )}
+              <div className="relative">
+                <button
+                  onClick={() => open(p.index, 'mail')}
+                  title={p.email || p.name}
+                  className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition-all duration-150 ${
+                    mailActive
+                      ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-950'
+                      : 'opacity-85 hover:opacity-100 hover:ring-2 hover:ring-white/40'
+                  }`}
+                  style={{ backgroundColor: p.color }}
+                >
+                  {showImg ? (
+                    <img
+                      src={p.avatarUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      onError={() =>
+                        setBrokenAvatars((b) => ({ ...b, [p.avatarUrl]: true }))
+                      }
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    initial(p)
+                  )}
+                </button>
                 {count > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-neutral-950">
+                  <span className="pointer-events-none absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-neutral-950">
                     {count > 99 ? '99+' : count}
                   </span>
                 )}
-              </button>
+              </div>
               <button
                 onClick={() => open(p.index, 'calendar')}
                 title={`${p.email || p.name} — Calendar`}
