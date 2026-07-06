@@ -28,8 +28,10 @@ echo "› Bundling Electron main/preload…"
 npm run build:main
 
 # 3. Start the Next.js dev server in the background.
+# Run from inside renderer/ so Next picks up renderer's postcss/tailwind config
+# and Tailwind's content globs resolve against the renderer directory.
 echo "› Starting Next.js dev server on ${RENDERER_URL}…"
-./renderer/node_modules/.bin/next dev renderer -p "${RENDERER_PORT}" &
+(cd renderer && ./node_modules/.bin/next dev -p "${RENDERER_PORT}") &
 DEV_PID=$!
 
 # Always stop the dev server when this script exits.
