@@ -23,8 +23,6 @@ interface DesktopBridge {
   onUnreadChanged(cb: (counts: Record<string, number>) => void): void;
   updateAccount(id: string, patch: { label?: string; color?: string }): Promise<Account | null>;
   toggleSettings(open: boolean): void;
-  getSettings(): Promise<{ outlookShortcuts: boolean }>;
-  setSettings(patch: { outlookShortcuts?: boolean }): Promise<{ outlookShortcuts: boolean }>;
   onSettingsForceClose(cb: () => void): void;
 }
 

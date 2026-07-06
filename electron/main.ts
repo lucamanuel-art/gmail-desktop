@@ -7,8 +7,6 @@ import { AccountViewManager } from './account-view-manager';
 import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
-import { SettingsStore } from './settings-store';
-import { installMenu } from './menu';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -18,7 +16,6 @@ const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 let mainWindow: BrowserWindow | null = null;
 let manager: AccountViewManager | null = null;
 let store: AccountsStore | null = null;
-let settings: SettingsStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
@@ -65,7 +62,6 @@ function createWindow(): void {
   });
 
   store = new AccountsStore(join(app.getPath('userData'), 'accounts.json'));
-  settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
   manager = new AccountViewManager(
     mainWindow,
     PRELOAD_PATH,
@@ -83,7 +79,6 @@ function createWindow(): void {
       pushAccounts();
     },
   );
-  manager.setShortcutsEnabled(settings.get().outlookShortcuts);
 
   for (const account of store.list()) manager.ensureView(account);
   const first = store.list()[0];
@@ -126,18 +121,11 @@ function registerIpc(): void {
     if (arg.open) manager?.hideAll();
     else manager?.showActive();
   });
-  ipcMain.handle(IPC.SETTINGS_GET, () => settings!.get());
-  ipcMain.handle(IPC.SETTINGS_SET, (_e, patch: { outlookShortcuts?: boolean }) => {
-    const next = settings!.set(patch);
-    manager?.setShortcutsEnabled(next.outlookShortcuts);
-    return next;
-  });
 }
 
 app.whenReady().then(() => {
   registerAppProtocol();
   registerIpc();
-  installMenu();
   createWindow();
   tray = createTray({
     onOpen: () => mainWindow?.show(),
