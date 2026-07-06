@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Cross-platform desktop wrapper for Gmail",
+  "author": "Luca Manuel <luca.manuel@abovomaxlead.nl>",
+  "homepage": "https://abovomaxlead.nl",
   "main": "dist-electron/main.js",
   "engines": {
     "node": ">=22",
