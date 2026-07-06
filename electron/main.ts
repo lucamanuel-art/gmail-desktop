@@ -9,6 +9,7 @@ import { IPC } from './ipc';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
+const SIDEBAR_PRELOAD_PATH = join(__dirname, 'sidebar-preload.js');
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 
 let mainWindow: BrowserWindow | null = null;
@@ -47,7 +48,7 @@ function createWindow(): void {
     width: 1200,
     height: 820,
     backgroundColor: '#0a0a0a',
-    webPreferences: { preload: PRELOAD_PATH },
+    webPreferences: { preload: SIDEBAR_PRELOAD_PATH, contextIsolation: true },
   });
 
   store = new AccountsStore(join(app.getPath('userData'), 'accounts.json'));
