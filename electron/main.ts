@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, ipcMain, session } from 'electron';
+import { app, BrowserWindow, protocol, net, ipcMain, session, Menu } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
@@ -286,6 +286,7 @@ if (!gotTheLock) {
 
 app.whenReady().then(() => {
   if (!gotTheLock) return; // a primary instance is already running
+  Menu.setApplicationMenu(null); // drop the default File/Edit/View… menu bar
   registerAppProtocol();
   setupNotifications();
   registerIpc();
