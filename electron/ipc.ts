@@ -15,7 +15,7 @@ export const IPC = {
   ACCOUNT_IDENTITY: 'account:identity', // send({email,name,avatarUrl})
   EDITABLE_FOCUS: 'editable:focus', // send(boolean)
   // renderer (sidebar) -> main
-  ACCOUNTS_UPDATE: 'accounts:update', // invoke(id, {label?,color?})
+  ACCOUNTS_UPDATE: 'accounts:update', // invoke(id, patch: {label?,color?,email?,name?,avatarUrl?})
   SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
   SETTINGS_GET: 'settings:get', // invoke -> Settings
   SETTINGS_SET: 'settings:set', // invoke(patch) -> Settings

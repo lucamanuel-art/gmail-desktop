@@ -18,4 +18,10 @@ describe('menuTemplate', () => {
     expect(roles).not.toContain('forceReload');
     expect(roles).not.toContain('toggleDevTools');
   });
+  it('includes a quit role so the app is quittable', () => {
+    const roles = menuTemplate()
+      .flatMap((m) => (m.submenu ?? []) as Array<{ role?: string }>)
+      .map((i) => i.role);
+    expect(roles).toContain('quit');
+  });
 });
