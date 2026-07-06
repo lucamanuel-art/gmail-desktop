@@ -1,7 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
 interface Account {
   id: string;
   label: string;
@@ -22,12 +20,6 @@ export function SettingsPanel({
   onClose: () => void;
   onChanged: (list: Account[]) => void;
 }) {
-  const [shortcuts, setShortcuts] = useState(true);
-
-  useEffect(() => {
-    window.desktop?.getSettings().then((s) => setShortcuts(s.outlookShortcuts));
-  }, []);
-
   async function rename(id: string, label: string) {
     await window.desktop?.updateAccount(id, { label });
     onChanged(accounts.map((a) => (a.id === id ? { ...a, label } : a)));
@@ -39,10 +31,6 @@ export function SettingsPanel({
   async function remove(id: string) {
     await window.desktop?.removeAccount(id);
     onChanged(accounts.filter((a) => a.id !== id));
-  }
-  async function toggleShortcuts(next: boolean) {
-    setShortcuts(next);
-    await window.desktop?.setSettings({ outlookShortcuts: next });
   }
 
   return (
@@ -94,16 +82,6 @@ export function SettingsPanel({
         ))}
         {accounts.length === 0 && <p className="text-sm text-neutral-400">No accounts yet.</p>}
       </div>
-
-      <h2 className="mb-2 text-sm uppercase tracking-wide text-neutral-400">Shortcuts</h2>
-      <label className="flex items-center gap-3 text-sm">
-        <input type="checkbox" checked={shortcuts} onChange={(e) => toggleShortcuts(e.target.checked)} />
-        Enable Outlook keyboard shortcuts
-      </label>
-      <p className="mt-2 max-w-prose text-xs text-neutral-400">
-        For these to work, turn on Gmail keyboard shortcuts in Gmail: Settings → See all settings →
-        General → Keyboard shortcuts on.
-      </p>
     </div>
   );
 }

@@ -62,13 +62,6 @@ if (typeof document !== 'undefined') {
       window.Notification = Wrapped;
     }
 
-    // Report editable-focus so the main process can disambiguate shortcuts.
-    const reportFocus = () =>
-      ipcRenderer.send(IPC.EDITABLE_FOCUS, isEditableTarget(document.activeElement));
-    document.addEventListener('focusin', reportFocus);
-    document.addEventListener('focusout', reportFocus);
-    reportFocus();
-
     // Poll for the signed-in identity and report it once found.
     let identityTries = 0;
     const identityTimer = setInterval(() => {
