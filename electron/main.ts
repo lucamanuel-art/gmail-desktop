@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { AccountsStore, type Account } from './accounts-store';
 import { AccountViewManager } from './account-view-manager';
 import { totalUnread } from './badge-math';
+import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
@@ -56,6 +57,7 @@ function createWindow(): void {
     (accountId, count) => {
       unreadCounts[accountId] = count;
       pushUnread();
+      applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
     },
     (accountId) => activate(accountId),
   );
