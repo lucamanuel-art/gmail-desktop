@@ -1,0 +1,20 @@
+appId: com.gmaildesktop.app
+productName: Gmail Desktop
+directories:
+  output: dist
+files:
+  - dist-electron/**/*
+  - renderer/out/**/*
+  - package.json
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Network
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity

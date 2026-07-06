@@ -1,0 +1,16 @@
+import { describe, it, expect, vi } from 'vitest';
+import { applyBadge } from '../electron/badge-controller';
+
+describe('applyBadge', () => {
+  it('sets the badge to the summed unread total', () => {
+    const setBadge = vi.fn();
+    const total = applyBadge({ a: 2, b: 3 }, setBadge);
+    expect(total).toBe(5);
+    expect(setBadge).toHaveBeenCalledWith(5);
+  });
+  it('sets 0 when nothing is unread', () => {
+    const setBadge = vi.fn();
+    applyBadge({ a: 0 }, setBadge);
+    expect(setBadge).toHaveBeenCalledWith(0);
+  });
+});

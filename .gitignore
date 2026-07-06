@@ -1,0 +1,7 @@
+node_modules/
+dist-electron/
+renderer/out/
+renderer/.next/
+dist/
+*.log
+.claude/
