@@ -11,6 +11,7 @@ publish:
   provider: github
   owner: lucamanuel-art
   repo: gmail-desktop
+  releaseType: release
 linux:
   target:
     - AppImage
