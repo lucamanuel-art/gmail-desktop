@@ -11,4 +11,12 @@ export const IPC = {
   // main -> renderer (sidebar)
   ACCOUNTS_CHANGED: 'accounts:changed', // Account[]
   UNREAD_CHANGED: 'unread:changed', // Record<accountId, number>
+  // Gmail view -> main
+  ACCOUNT_IDENTITY: 'account:identity', // send({email,name,avatarUrl})
+  EDITABLE_FOCUS: 'editable:focus', // send(boolean)
+  // renderer (sidebar) -> main
+  ACCOUNTS_UPDATE: 'accounts:update', // invoke(id, {label?,color?})
+  SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
+  SETTINGS_GET: 'settings:get', // invoke -> Settings
+  SETTINGS_SET: 'settings:set', // invoke(patch) -> Settings
 } as const;

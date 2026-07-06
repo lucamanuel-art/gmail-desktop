@@ -38,4 +38,26 @@ describe('AccountsStore', () => {
     store.remove(a.id);
     expect(store.list()).toEqual([b]);
   });
+
+  it('updates label and color of an existing account', () => {
+    const a = store.add({ label: 'A', color: '#000' });
+    const updated = store.update(a.id, { label: 'Work', color: '#EA4335' });
+    expect(updated).toEqual({ ...a, label: 'Work', color: '#EA4335' });
+    expect(store.list()[0]).toEqual({ ...a, label: 'Work', color: '#EA4335' });
+  });
+
+  it('persists identity fields via update', () => {
+    const a = store.add({ label: 'A', color: '#000' });
+    store.update(a.id, { email: 'me@gmail.com', name: 'Me', avatarUrl: 'https://x/y.png' });
+    const reopened = new AccountsStore((store as unknown as { filePath: string }).filePath);
+    expect(reopened.list()[0]).toMatchObject({
+      email: 'me@gmail.com',
+      name: 'Me',
+      avatarUrl: 'https://x/y.png',
+    });
+  });
+
+  it('returns null when updating a missing id', () => {
+    expect(store.update('nope', { label: 'X' })).toBeNull();
+  });
 });

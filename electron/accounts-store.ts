@@ -6,6 +6,9 @@ export interface Account {
   id: string;
   label: string;
   color: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
 }
 
 export class AccountsStore {
@@ -31,6 +34,19 @@ export class AccountsStore {
 
   remove(id: string): void {
     this.persist(this.list().filter((a) => a.id !== id));
+  }
+
+  update(
+    id: string,
+    patch: Partial<Pick<Account, 'label' | 'color' | 'email' | 'name' | 'avatarUrl'>>,
+  ): Account | null {
+    const accounts = this.list();
+    const idx = accounts.findIndex((a) => a.id === id);
+    if (idx === -1) return null;
+    const updated = { ...accounts[idx], ...patch };
+    accounts[idx] = updated;
+    this.persist(accounts);
+    return updated;
   }
 
   private persist(accounts: Account[]): void {
