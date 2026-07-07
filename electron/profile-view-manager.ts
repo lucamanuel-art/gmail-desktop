@@ -2,6 +2,7 @@ import { BrowserWindow, WebContentsView } from 'electron';
 import { contentBounds } from './layout';
 import { IPC } from './ipc';
 import { mailUrl, calendarUrl } from './google-urls';
+import { attachExternalLinkHandling } from './external-links';
 import type { KeyInput } from './shortcuts';
 
 export type Surface = 'mail' | 'calendar';
@@ -52,6 +53,7 @@ export class ProfileViewManager {
         backgroundThrottling: surface === 'calendar' ? false : true,
       },
     });
+    attachExternalLinkHandling(view.webContents);
     view.webContents.on('ipc-message', (_e, channel, ...args) => {
       if (surface === 'mail') {
         if (channel === IPC.UNREAD_UPDATE) this.onUnread(index, Number(args[0]) || 0);
