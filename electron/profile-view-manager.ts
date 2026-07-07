@@ -27,7 +27,7 @@ export class ProfileViewManager {
     private readonly win: BrowserWindow,
     private readonly preloadPath: string,
     private readonly onUnread: (index: number, count: number) => void,
-    private readonly onActivate: (index: number) => void,
+    private readonly onActivate: (index: number, surface: Surface) => void,
     private readonly onIdentity: (
       index: number,
       identity: { email: string; name: string; avatarUrl: string },
@@ -49,15 +49,16 @@ export class ProfileViewManager {
         preload: this.preloadPath,
         partition: SESSION_PARTITION,
         contextIsolation: false,
+        backgroundThrottling: surface === 'calendar' ? false : true,
       },
     });
-    if (surface === 'mail') {
-      view.webContents.on('ipc-message', (_e, channel, ...args) => {
+    view.webContents.on('ipc-message', (_e, channel, ...args) => {
+      if (surface === 'mail') {
         if (channel === IPC.UNREAD_UPDATE) this.onUnread(index, Number(args[0]) || 0);
-        else if (channel === IPC.NOTIFICATION_ACTIVATE) this.onActivate(index);
         else if (channel === IPC.ACCOUNT_IDENTITY) this.onIdentity(index, args[0]);
-      });
-    }
+      }
+      if (channel === IPC.NOTIFICATION_ACTIVATE) this.onActivate(index, surface);
+    });
     void view.webContents.loadURL(
       urlOverride ?? (surface === 'mail' ? mailUrl(index) : calendarUrl(index)),
     );
@@ -132,8 +133,8 @@ export class ProfileViewManager {
     return this.views.get(this.activeKey)?.webContents.getZoomLevel() ?? 0;
   }
 
-  pushNotifyAllowed(index: number, allowed: boolean): void {
-    const v = this.views.get(key(index, 'mail'));
+  pushNotifyAllowed(index: number, surface: Surface, allowed: boolean): void {
+    const v = this.views.get(key(index, surface));
     v?.webContents.send(IPC.NOTIFY_ALLOWED, allowed);
   }
 }

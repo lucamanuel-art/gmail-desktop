@@ -246,8 +246,10 @@ let notifyTimer: ReturnType<typeof setInterval> | null = null;
 function refreshNotifyAllowed(): void {
   if (!prefs) return;
   const p = prefs.getAll();
+  const now = new Date();
   for (const profile of profiles) {
-    manager?.pushNotifyAllowed(profile.index, notificationsAllowed(p, profile.email, new Date()));
+    manager?.pushNotifyAllowed(profile.index, 'mail', notificationsAllowed(p, profile.email, now, 'mail'));
+    manager?.pushNotifyAllowed(profile.index, 'calendar', notificationsAllowed(p, profile.email, now, 'calendar'));
   }
 }
 function startNotifyTimer(): void {
@@ -283,7 +285,7 @@ function createWindow(): void {
       pushUnread();
       applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
-    (index) => {
+    (index, surface) => {
       if (mainWindow) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.show();
@@ -293,7 +295,7 @@ function createWindow(): void {
         settingsPanelOpen = false;
         mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
       }
-      switchSurface(index, 'mail');
+      switchSurface(index, surface);
     },
     (index, identity) => onIdentity(index, identity),
     (index, input) => handleInput(index, input),
