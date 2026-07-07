@@ -439,6 +439,7 @@ function registerIpc(): void {
     if ('calendarNotify' in arg) patch.calendarNotify = arg.calendarNotify;
     prefs!.setAccount(arg.email, patch);
     pushProfiles();
+    pushPrefs(); // keep the settings UI's per-account toggles in sync with what was stored
     refreshNotifyAllowed();
     syncCalendarViews();
   });
