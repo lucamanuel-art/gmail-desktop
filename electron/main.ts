@@ -66,6 +66,9 @@ function pushProfiles(): void {
 function pushUnread(): void {
   mainWindow?.webContents.send(IPC.UNREAD_CHANGED, { ...unreadCounts });
 }
+function pushPrefs(): void {
+  if (prefs) mainWindow?.webContents.send(IPC.PREFS_CHANGED, prefs.getAll());
+}
 
 function clearProbeTimer(): void {
   if (probeTimer) {
@@ -248,6 +251,7 @@ function createWindow(): void {
 
   mainWindow.webContents.on('did-finish-load', () => {
     pushProfiles(); // re-push on any (re)load so the sidebar repopulates
+    pushPrefs();
     mainWindow?.webContents.send(IPC.UPDATE_STATUS, { ...lastUpdateStatus, currentVersion: app.getVersion() });
     if (!detectionStarted) {
       detectionStarted = true;
@@ -342,6 +346,11 @@ function registerIpc(): void {
     if (arg.open) manager?.hideAll();
     else manager?.showActive();
   });
+  ipcMain.on(IPC.SET_AUTO_START, (_e, v: boolean) => {
+    prefs!.setAutoStart(v);
+    app.setLoginItemSettings({ openAtLogin: v });
+    pushPrefs();
+  });
 }
 
 // Single-instance: closing the window keeps the process alive in the tray, so a
@@ -365,6 +374,7 @@ app.whenReady().then(() => {
   setupNotifications();
   registerIpc();
   createWindow();
+  app.setLoginItemSettings({ openAtLogin: prefs!.getAll().autoStart });
   tray = createTray(ICON_PATH, {
     onOpen: () => mainWindow?.show(),
     onQuit: () => {

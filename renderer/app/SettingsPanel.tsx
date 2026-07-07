@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { Prefs } from './page';
 
 interface Profile {
   index: number;
@@ -77,6 +78,8 @@ export function SettingsPanel({
   onCheckUpdate,
   onDownloadUpdate,
   onInstallUpdate,
+  prefs,
+  onSetAutoStart,
 }: {
   profiles: Profile[];
   onClose: () => void;
@@ -85,6 +88,8 @@ export function SettingsPanel({
   onCheckUpdate: () => void;
   onDownloadUpdate: () => void;
   onInstallUpdate: () => void;
+  prefs: Prefs | null;
+  onSetAutoStart: (v: boolean) => void;
 }) {
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
@@ -103,6 +108,21 @@ export function SettingsPanel({
           >
             Close
           </button>
+        </div>
+
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          General
+        </h2>
+        <div className="mb-6 rounded-xl border border-white/5 bg-neutral-900 p-4">
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm">Start Gmail Desktop when I sign in</span>
+            <input
+              type="checkbox"
+              checked={!!prefs?.autoStart}
+              onChange={(e) => onSetAutoStart(e.target.checked)}
+              className="h-4 w-4 accent-blue-600"
+            />
+          </label>
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">

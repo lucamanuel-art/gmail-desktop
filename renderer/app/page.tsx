@@ -31,6 +31,20 @@ export interface UpdateStatus {
   message?: string;
 }
 
+export interface AccountPref {
+  order?: number;
+  label?: string;
+  zoom?: number;
+  notify?: boolean;
+}
+export interface Prefs {
+  window: { width: number; height: number; x?: number; y?: number; maximized: boolean };
+  autoStart: boolean;
+  theme: 'system' | 'light' | 'dark';
+  notifications: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } };
+  accounts: Record<string, AccountPref>;
+}
+
 interface DesktopBridge {
   onProfilesChanged(cb: (profiles: Profile[]) => void): void;
   onUnreadChanged(cb: (counts: Record<number, number>) => void): void;
@@ -45,6 +59,8 @@ interface DesktopBridge {
   downloadUpdate(): void;
   installUpdate(): void;
   onUpdateStatus(cb: (status: UpdateStatus) => void): void;
+  setAutoStart(v: boolean): void;
+  onPrefsChanged(cb: (prefs: Prefs) => void): void;
 }
 
 declare global {
@@ -108,6 +124,7 @@ export default function Sidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' });
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -123,6 +140,7 @@ export default function Sidebar() {
     bridge.onUnreadChanged(setUnread);
     bridge.onSettingsForceClose(() => setSettingsOpen(false));
     bridge.onUpdateStatus(setUpdate);
+    bridge.onPrefsChanged((p) => setPrefs(p as Prefs));
   }, []);
 
   function open(index: number, surface: Surface) {
@@ -237,6 +255,8 @@ export default function Sidebar() {
           onCheckUpdate={() => window.desktop?.checkForUpdate()}
           onDownloadUpdate={() => window.desktop?.downloadUpdate()}
           onInstallUpdate={() => window.desktop?.installUpdate()}
+          prefs={prefs}
+          onSetAutoStart={(v) => window.desktop?.setAutoStart(v)}
         />
       )}
     </div>

@@ -14,9 +14,11 @@ export const IPC = {
   UPDATE_CHECK: 'update:check', // send() — check GitHub for a newer release
   UPDATE_DOWNLOAD: 'update:download', // send() — download + auto-install the update
   UPDATE_INSTALL: 'update:install', // send() — restart into an already-downloaded update
+  SET_AUTO_START: 'prefs:auto-start', // send(boolean)
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
   UPDATE_STATUS: 'update:status', // { state, currentVersion, version?, percent?, message? }
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
+  PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
 } as const;
