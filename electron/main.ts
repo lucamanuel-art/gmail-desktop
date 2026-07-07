@@ -195,7 +195,7 @@ function addAccount(): void {
 
 let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
 function saveWindowBounds(): void {
-  if (!mainWindow || !prefs) return;
+  if (!mainWindow || mainWindow.isDestroyed() || !prefs) return;
   const maximized = mainWindow.isMaximized();
   const b = mainWindow.getNormalBounds();
   prefs.setWindow({ width: b.width, height: b.height, x: b.x, y: b.y, maximized });
@@ -265,6 +265,10 @@ function createWindow(): void {
   mainWindow.on('resize', scheduleSaveBounds);
   mainWindow.on('move', scheduleSaveBounds);
   mainWindow.on('close', saveWindowBounds);
+  mainWindow.on('closed', () => {
+    if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+    mainWindow = null;
+  });
 }
 
 function sendUpdate(status: Record<string, unknown>): void {
