@@ -23,7 +23,9 @@ jobs:
         run: npm ci --prefix renderer
 
       - name: Build installer (no publish)
-        run: npm run dist
+        # electron-builder auto-publishes in CI when a publish config exists;
+        # --publish never forces a build-only run (no GH_TOKEN, no release).
+        run: npm run build && npx electron-builder --publish never
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
