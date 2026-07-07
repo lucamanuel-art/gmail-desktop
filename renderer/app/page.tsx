@@ -216,6 +216,7 @@ export default function Sidebar() {
               onDragStart={() => setDragEmail(p.email)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => onDrop(p.email)}
+              onDragEnd={() => setDragEmail(null)}
               className={`flex flex-col items-center gap-1.5 ${dragEmail === p.email ? 'opacity-40' : ''}`}
             >
               <div className="relative">
