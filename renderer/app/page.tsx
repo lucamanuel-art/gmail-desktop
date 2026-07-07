@@ -284,6 +284,7 @@ export default function Sidebar() {
           onInstallUpdate={() => window.desktop?.installUpdate()}
           prefs={prefs}
           onSetAutoStart={(v) => window.desktop?.setAutoStart(v)}
+          onSetNotifications={(a) => window.desktop?.setNotifications(a)}
         />
       )}
     </div>

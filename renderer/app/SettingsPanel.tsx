@@ -81,6 +81,7 @@ export function SettingsPanel({
   onInstallUpdate,
   prefs,
   onSetAutoStart,
+  onSetNotifications,
 }: {
   profiles: Profile[];
   onClose: () => void;
@@ -91,6 +92,10 @@ export function SettingsPanel({
   onInstallUpdate: () => void;
   prefs: Prefs | null;
   onSetAutoStart: (v: boolean) => void;
+  onSetNotifications: (arg: {
+    dnd: boolean;
+    quietHours: { enabled: boolean; start: string; end: string };
+  }) => void;
 }) {
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
@@ -124,6 +129,59 @@ export function SettingsPanel({
               className="h-4 w-4 accent-blue-600"
             />
           </label>
+        </div>
+
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          Notifications
+        </h2>
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/5 bg-neutral-900 p-4">
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm">Do not disturb (mute all)</span>
+            <input
+              type="checkbox"
+              checked={!!prefs?.notifications.dnd}
+              onChange={(e) =>
+                onSetNotifications({ dnd: e.target.checked, quietHours: prefs!.notifications.quietHours })
+              }
+              className="h-4 w-4 accent-blue-600"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm">Quiet hours</span>
+            <input
+              type="checkbox"
+              checked={!!prefs?.notifications.quietHours.enabled}
+              onChange={(e) =>
+                onSetNotifications({
+                  dnd: prefs!.notifications.dnd,
+                  quietHours: { ...prefs!.notifications.quietHours, enabled: e.target.checked },
+                })
+              }
+              className="h-4 w-4 accent-blue-600"
+            />
+          </label>
+          {prefs?.notifications.quietHours.enabled && (
+            <div className="flex items-center gap-2 text-sm text-neutral-300">
+              <span>From</span>
+              <input
+                type="time"
+                value={prefs.notifications.quietHours.start}
+                onChange={(e) =>
+                  onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, start: e.target.value } })
+                }
+                className="rounded bg-neutral-800 px-2 py-1"
+              />
+              <span>to</span>
+              <input
+                type="time"
+                value={prefs.notifications.quietHours.end}
+                onChange={(e) =>
+                  onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, end: e.target.value } })
+                }
+                className="rounded bg-neutral-800 px-2 py-1"
+              />
+            </div>
+          )}
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
@@ -226,6 +284,14 @@ export function SettingsPanel({
                         style={{ backgroundColor: c }}
                       />
                     ))}
+                    <label className="flex items-center gap-1 text-xs text-neutral-400" title="Notifications for this account">
+                      <input
+                        type="checkbox"
+                        checked={prefs?.accounts?.[p.email]?.notify !== false}
+                        onChange={(e) => window.desktop?.setAccountPref({ email: p.email, notify: e.target.checked })}
+                        className="h-3.5 w-3.5 accent-blue-600"
+                      />
+                    </label>
                     <button
                       onClick={() => setConfirmEmail(p.email)}
                       aria-label="Remove account"
