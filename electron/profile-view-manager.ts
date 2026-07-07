@@ -86,6 +86,10 @@ export class ProfileViewManager {
     return this.activeKey ? Number(this.activeKey.split(':')[0]) : null;
   }
 
+  isShowing(index: number, surface: Surface): boolean {
+    return this.activeKey === key(index, surface);
+  }
+
   discardView(index: number, surface: Surface): void {
     const k = key(index, surface);
     const view = this.views.get(k);

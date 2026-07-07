@@ -137,6 +137,7 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
     profiles.sort((a, b) => a.index - b.index);
     pushProfiles();
     refreshNotifyAllowed();
+    syncCalendarViews();
     if (visibleProbe === index) {
       // A freshly added account (via the "+" flow): keep it on screen.
       switchSurface(index, 'mail');
@@ -256,6 +257,22 @@ function startNotifyTimer(): void {
   if (notifyTimer) return;
   // Quiet-hours boundaries only change on the minute; re-evaluate each minute.
   notifyTimer = setInterval(refreshNotifyAllowed, 60_000);
+}
+
+// Keep a hidden calendar view alive for each account with calendar reminders
+// enabled, so Google Calendar fires its native reminders in the background.
+// Views for disabled accounts are torn down (unless currently shown) to free memory.
+function syncCalendarViews(): void {
+  if (!prefs || !manager) return;
+  for (const profile of profiles) {
+    const enabled = prefs.getAccount(profile.email).calendarNotify === true;
+    if (enabled) {
+      manager.ensureView(profile.index, 'calendar', false);
+    } else if (!manager.isShowing(profile.index, 'calendar')) {
+      manager.discardView(profile.index, 'calendar');
+    }
+  }
+  refreshNotifyAllowed(); // push flags to any newly created calendar views
 }
 
 function createWindow(): void {
@@ -423,6 +440,7 @@ function registerIpc(): void {
     prefs!.setAccount(arg.email, patch);
     pushProfiles();
     refreshNotifyAllowed();
+    syncCalendarViews();
   });
   ipcMain.on(IPC.SET_ACCOUNT_ORDER, (_e, arg: { emails: string[] }) => {
     prefs!.setOrder(arg.emails);
