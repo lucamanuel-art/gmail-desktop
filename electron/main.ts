@@ -284,7 +284,11 @@ function createWindow(): void {
       applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
     (index) => {
-      mainWindow?.show();
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
       if (settingsPanelOpen) {
         settingsPanelOpen = false;
         mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
