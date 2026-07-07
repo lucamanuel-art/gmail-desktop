@@ -140,9 +140,10 @@ export function SettingsPanel({
             <input
               type="checkbox"
               checked={!!prefs?.notifications.dnd}
-              onChange={(e) =>
-                onSetNotifications({ dnd: e.target.checked, quietHours: prefs!.notifications.quietHours })
-              }
+              onChange={(e) => {
+                if (!prefs) return;
+                onSetNotifications({ dnd: e.target.checked, quietHours: prefs!.notifications.quietHours });
+              }}
               className="h-4 w-4 accent-blue-600"
             />
           </label>
@@ -151,12 +152,13 @@ export function SettingsPanel({
             <input
               type="checkbox"
               checked={!!prefs?.notifications.quietHours.enabled}
-              onChange={(e) =>
+              onChange={(e) => {
+                if (!prefs) return;
                 onSetNotifications({
                   dnd: prefs!.notifications.dnd,
                   quietHours: { ...prefs!.notifications.quietHours, enabled: e.target.checked },
-                })
-              }
+                });
+              }}
               className="h-4 w-4 accent-blue-600"
             />
           </label>
@@ -166,18 +168,20 @@ export function SettingsPanel({
               <input
                 type="time"
                 value={prefs.notifications.quietHours.start}
-                onChange={(e) =>
-                  onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, start: e.target.value } })
-                }
+                onChange={(e) => {
+                  if (!prefs) return;
+                  onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, start: e.target.value } });
+                }}
                 className="rounded bg-neutral-800 px-2 py-1"
               />
               <span>to</span>
               <input
                 type="time"
                 value={prefs.notifications.quietHours.end}
-                onChange={(e) =>
-                  onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, end: e.target.value } })
-                }
+                onChange={(e) => {
+                  if (!prefs) return;
+                  onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, end: e.target.value } });
+                }}
                 className="rounded bg-neutral-800 px-2 py-1"
               />
             </div>
