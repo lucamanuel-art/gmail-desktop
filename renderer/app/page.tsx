@@ -202,7 +202,7 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-neutral-950 text-neutral-200">
+    <div className="flex h-screen w-full bg-neutral-100 text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
       <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 py-4">
         {profiles.map((p) => {
           const mailActive = active?.index === p.index && active.surface === 'mail';
@@ -224,7 +224,7 @@ export default function Sidebar() {
                   title={displayName(p)}
                   className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition-all duration-150 ${
                     mailActive
-                      ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-950'
+                      ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-100 dark:ring-offset-neutral-950'
                       : 'opacity-85 hover:opacity-100 hover:ring-2 hover:ring-white/40'
                   }`}
                   style={{ backgroundColor: p.color }}
@@ -244,7 +244,7 @@ export default function Sidebar() {
                   )}
                 </button>
                 {count > 0 && (
-                  <span className="pointer-events-none absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-neutral-950">
+                  <span className="pointer-events-none absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-neutral-100 dark:ring-neutral-950">
                     {count > 99 ? '99+' : count}
                   </span>
                 )}
@@ -254,8 +254,8 @@ export default function Sidebar() {
                 title={`${displayName(p)} — Calendar`}
                 className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
                   calActive
-                    ? 'bg-white/15 ring-1 ring-white/30'
-                    : 'opacity-70 hover:bg-white/10 hover:opacity-100'
+                    ? 'bg-black/10 ring-1 ring-black/20 dark:bg-white/15 dark:ring-white/30'
+                    : 'opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10'
                 }`}
               >
                 <CalendarIcon className="h-5 w-5" />
@@ -264,12 +264,12 @@ export default function Sidebar() {
           );
         })}
 
-        <div className="my-1 h-px w-8 shrink-0 bg-white/10" />
+        <div className="my-1 h-px w-8 shrink-0 bg-black/10 dark:bg-white/10" />
 
         <button
           onClick={addAccount}
           title="Add account"
-          className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-white/20 text-neutral-400 transition hover:border-white/40 hover:text-white"
+          className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-black/20 text-neutral-500 transition hover:border-black/40 hover:text-neutral-900 dark:border-white/20 dark:text-neutral-400 dark:hover:border-white/40 dark:hover:text-white"
         >
           <PlusIcon className="h-5 w-5" />
         </button>
@@ -280,8 +280,8 @@ export default function Sidebar() {
             title="Settings"
             className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
               settingsOpen
-                ? 'bg-white/15 text-white'
-                : 'text-neutral-500 hover:bg-white/10 hover:text-white'
+                ? 'bg-black/10 text-neutral-900 dark:bg-white/15 dark:text-white'
+                : 'text-neutral-500 hover:bg-black/5 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white'
             }`}
           >
             <GearIcon className="h-5 w-5" />

@@ -104,13 +104,13 @@ export function SettingsPanel({
   const statusText = updateStatusText(update);
 
   return (
-    <div className="flex h-screen flex-1 flex-col overflow-y-auto bg-neutral-950 text-neutral-100">
+    <div className="flex h-screen flex-1 flex-col overflow-y-auto bg-neutral-100 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
       <div className="mx-auto w-full max-w-2xl px-8 py-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <button
             onClick={onClose}
-            className="rounded-lg bg-neutral-800 px-3.5 py-1.5 text-sm font-medium text-neutral-200 transition hover:bg-neutral-700"
+            className="rounded-lg bg-neutral-200 px-3.5 py-1.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
           >
             Close
           </button>
@@ -119,7 +119,7 @@ export function SettingsPanel({
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
           General
         </h2>
-        <div className="mb-6 rounded-xl border border-white/5 bg-neutral-900 p-4">
+        <div className="mb-6 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm">Start Gmail Desktop when I sign in</span>
             <input
@@ -129,12 +129,24 @@ export function SettingsPanel({
               className="h-4 w-4 accent-blue-600"
             />
           </label>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-sm">Theme</span>
+            <select
+              value={prefs?.theme ?? 'system'}
+              onChange={(e) => window.desktop?.setTheme(e.target.value as 'system' | 'light' | 'dark')}
+              className="rounded bg-neutral-200 px-2 py-1 text-sm text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
           Notifications
         </h2>
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/5 bg-neutral-900 p-4">
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm">Do not disturb (mute all)</span>
             <input
@@ -163,7 +175,7 @@ export function SettingsPanel({
             />
           </label>
           {prefs?.notifications.quietHours.enabled && (
-            <div className="flex items-center gap-2 text-sm text-neutral-300">
+            <div className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
               <span>From</span>
               <input
                 type="time"
@@ -172,7 +184,7 @@ export function SettingsPanel({
                   if (!prefs) return;
                   onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, start: e.target.value } });
                 }}
-                className="rounded bg-neutral-800 px-2 py-1"
+                className="rounded bg-neutral-200 px-2 py-1 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
               />
               <span>to</span>
               <input
@@ -182,7 +194,7 @@ export function SettingsPanel({
                   if (!prefs) return;
                   onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, end: e.target.value } });
                 }}
-                className="rounded bg-neutral-800 px-2 py-1"
+                className="rounded bg-neutral-200 px-2 py-1 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
               />
             </div>
           )}
@@ -191,7 +203,7 @@ export function SettingsPanel({
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
           About &amp; updates
         </h2>
-        <div className="mb-6 rounded-xl border border-white/5 bg-neutral-900 p-4">
+        <div className="mb-6 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">Gmail Desktop</div>
@@ -217,7 +229,7 @@ export function SettingsPanel({
               <button
                 onClick={onCheckUpdate}
                 disabled={busy}
-                className="rounded-lg bg-neutral-800 px-3.5 py-1.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-neutral-200 px-3.5 py-1.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
               >
                 {update.state === 'checking' ? 'Checking…' : 'Check for updates'}
               </button>
@@ -243,7 +255,7 @@ export function SettingsPanel({
             return (
               <div
                 key={p.index}
-                className="flex flex-col gap-2 rounded-xl border border-white/5 bg-neutral-900 p-3.5"
+                className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-3.5"
               >
                 <div className="flex items-center gap-3">
                   <span
@@ -270,7 +282,7 @@ export function SettingsPanel({
                         const v = e.target.value.trim();
                         if (v !== (p.label ?? p.name ?? '')) window.desktop?.setAccountPref({ email: p.email, label: v });
                       }}
-                      className="w-full truncate rounded bg-transparent text-sm font-medium outline-none focus:bg-neutral-800 focus:px-2 focus:py-1"
+                      className="w-full truncate rounded bg-transparent text-sm font-medium outline-none focus:bg-neutral-200 focus:px-2 focus:py-1 dark:focus:bg-neutral-800"
                     />
                     <span className="truncate text-xs text-neutral-400">{p.email}</span>
                   </div>
@@ -282,7 +294,7 @@ export function SettingsPanel({
                         aria-label={`color ${c}`}
                         className={`h-5 w-5 rounded-full transition hover:scale-110 ${
                           p.color.toLowerCase() === c.toLowerCase()
-                            ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-900'
+                            ? 'ring-2 ring-white ring-offset-2 ring-offset-white dark:ring-offset-neutral-900'
                             : ''
                         }`}
                         style={{ backgroundColor: c }}
@@ -325,7 +337,7 @@ export function SettingsPanel({
                       </button>
                       <button
                         onClick={() => setConfirmEmail(null)}
-                        className="rounded bg-neutral-700 px-2.5 py-1 text-xs text-neutral-100 transition hover:bg-neutral-600"
+                        className="rounded bg-neutral-300 px-2.5 py-1 text-xs text-neutral-900 transition hover:bg-neutral-400 dark:bg-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-600"
                       >
                         Cancel
                       </button>
@@ -336,7 +348,7 @@ export function SettingsPanel({
             );
           })}
           {profiles.length === 0 && (
-            <p className="rounded-xl border border-white/5 bg-neutral-900 p-4 text-sm text-neutral-400">
+            <p className="rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4 text-sm text-neutral-400">
               No accounts detected yet.
             </p>
           )}
@@ -344,13 +356,13 @@ export function SettingsPanel({
 
         <button
           onClick={onRedetect}
-          className="w-fit rounded-lg bg-neutral-800 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-700"
+          className="w-fit rounded-lg bg-neutral-200 px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
         >
           Re-detect accounts
         </button>
         <p className="mt-3 max-w-prose text-xs leading-relaxed text-neutral-500">
           Accounts are detected from the Google accounts you are signed into. Use the{' '}
-          <span className="font-medium text-neutral-300">+</span> button in the sidebar to sign in
+          <span className="font-medium text-neutral-700 dark:text-neutral-300">+</span> button in the sidebar to sign in
           to a new account, or add one via Gmail&apos;s own account switcher and then re-detect.
         </p>
       </div>
