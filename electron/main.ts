@@ -1,10 +1,12 @@
-import { app, BrowserWindow, protocol, net, ipcMain, session, Menu } from 'electron';
+import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
+import { PrefsStore } from './prefs-store';
+import { clampBoundsToDisplays } from './window-bounds';
 import { colorForIndex } from './palette';
 import { planNext } from './detection-planner';
 import { addAccountUrl } from './google-urls';
@@ -26,6 +28,7 @@ let mainWindow: BrowserWindow | null = null;
 let manager: ProfileViewManager | null = null;
 let colors: ColorStore | null = null;
 let removed: RemovedStore | null = null;
+let prefs: PrefsStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
@@ -190,14 +193,35 @@ function addAccount(): void {
   manager?.ensureView(nextIndex, 'mail', true, addAccountUrl());
 }
 
+let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
+function saveWindowBounds(): void {
+  if (!mainWindow || !prefs) return;
+  const maximized = mainWindow.isMaximized();
+  const b = mainWindow.getNormalBounds();
+  prefs.setWindow({ width: b.width, height: b.height, x: b.x, y: b.y, maximized });
+}
+function scheduleSaveBounds(): void {
+  if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = setTimeout(saveWindowBounds, 400);
+}
+
 function createWindow(): void {
+  prefs = new PrefsStore(join(app.getPath('userData'), 'prefs.json'));
+  const stored = prefs.getAll().window;
+  const bounds = clampBoundsToDisplays(
+    { width: stored.width, height: stored.height, x: stored.x, y: stored.y },
+    screen.getAllDisplays().map((d) => ({ bounds: d.bounds })),
+  );
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 820,
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
     backgroundColor: '#0a0a0a',
     icon: ICON_PATH,
     webPreferences: { preload: SIDEBAR_PRELOAD_PATH, contextIsolation: true },
   });
+  if (stored.maximized) mainWindow.maximize();
   colors = new ColorStore(join(app.getPath('userData'), 'colors.json'));
   removed = new RemovedStore(join(app.getPath('userData'), 'removed.json'));
   manager = new ProfileViewManager(
@@ -237,6 +261,10 @@ function createWindow(): void {
       mainWindow?.hide();
     }
   });
+
+  mainWindow.on('resize', scheduleSaveBounds);
+  mainWindow.on('move', scheduleSaveBounds);
+  mainWindow.on('close', saveWindowBounds);
 }
 
 function sendUpdate(status: Record<string, unknown>): void {
