@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron';
+import { attachExternalLinkHandling } from './external-links';
 
 const SESSION_PARTITION = 'persist:google';
 
@@ -13,5 +14,6 @@ export function openCompose(index: number): void {
     backgroundColor: '#ffffff',
     webPreferences: { partition: SESSION_PARTITION, contextIsolation: true },
   });
+  attachExternalLinkHandling(win.webContents);
   void win.loadURL(`https://mail.google.com/mail/u/${index}/?view=cm&fs=1&tf=1`);
 }
