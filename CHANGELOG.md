@@ -3,6 +3,13 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.1.7] — 2026-07-07
+
+### Fixed
+- Links clicked inside an email now open in your default browser instead of
+  loading inside the mail view. Gmail, Calendar and Google sign-in navigation
+  still stay in the app.
+
 ## [0.1.6] — 2026-07-07
 
 ### Fixed
