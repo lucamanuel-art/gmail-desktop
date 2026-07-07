@@ -2,6 +2,7 @@ import { BrowserWindow, WebContentsView } from 'electron';
 import { contentBounds } from './layout';
 import { IPC } from './ipc';
 import { mailUrl, calendarUrl } from './google-urls';
+import type { KeyInput } from './shortcuts';
 
 export type Surface = 'mail' | 'calendar';
 
@@ -11,6 +12,8 @@ export interface Profile {
   name: string;
   avatarUrl: string;
   color: string;
+  order?: number;
+  label?: string;
 }
 
 const SESSION_PARTITION = 'persist:google';
@@ -29,6 +32,8 @@ export class ProfileViewManager {
       index: number,
       identity: { email: string; name: string; avatarUrl: string },
     ) => void,
+    private readonly onInput: (index: number, input: KeyInput) => void,
+    private readonly getZoom: (index: number) => number,
   ) {
     this.win.on('resize', () => this.relayout());
   }
@@ -56,6 +61,10 @@ export class ProfileViewManager {
     void view.webContents.loadURL(
       urlOverride ?? (surface === 'mail' ? mailUrl(index) : calendarUrl(index)),
     );
+    view.webContents.on('before-input-event', (_e, input) => this.onInput(index, input as unknown as KeyInput));
+    view.webContents.on('did-finish-load', () => {
+      view.webContents.setZoomLevel(this.getZoom(index));
+    });
     this.win.contentView.addChildView(view);
     view.setVisible(false);
     this.views.set(k, view);
@@ -110,5 +119,16 @@ export class ProfileViewManager {
   private applyBounds(view: WebContentsView): void {
     const [width, height] = this.win.getContentSize();
     view.setBounds(contentBounds({ width, height }));
+  }
+
+  setZoomForIndex(index: number, level: number): void {
+    for (const surface of ['mail', 'calendar'] as Surface[]) {
+      const v = this.views.get(key(index, surface));
+      if (v) v.webContents.setZoomLevel(level);
+    }
+  }
+  getActiveZoomLevel(): number {
+    if (!this.activeKey) return 0;
+    return this.views.get(this.activeKey)?.webContents.getZoomLevel() ?? 0;
   }
 }

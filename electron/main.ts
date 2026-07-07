@@ -14,6 +14,8 @@ import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
+import { resolveShortcut, type KeyInput } from './shortcuts';
+import { openCompose } from './compose-window';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -208,6 +210,28 @@ function scheduleSaveBounds(): void {
   saveBoundsTimer = setTimeout(saveWindowBounds, 400);
 }
 
+function handleInput(index: number, input: KeyInput): void {
+  const action = resolveShortcut(input);
+  if (!action) return;
+  if (action.type === 'switch') {
+    const ordered = [...profiles].sort((a, b) => (a.order ?? a.index) - (b.order ?? b.index));
+    const target = ordered[action.n - 1];
+    if (target) switchSurface(target.index, 'mail');
+  } else if (action.type === 'compose') {
+    const active = manager?.activeIndex();
+    if (active != null) openCompose(active);
+  } else if (action.type === 'zoom') {
+    const active = manager?.activeIndex();
+    if (active == null) return;
+    const current = manager!.getActiveZoomLevel();
+    const level = action.dir === 'reset' ? 0 : current + (action.dir === 'in' ? 0.5 : -0.5);
+    const clamped = Math.max(-3, Math.min(3, level));
+    manager!.setZoomForIndex(active, clamped);
+    const email = profiles.find((p) => p.index === active)?.email;
+    if (email) prefs!.setAccount(email, { zoom: clamped });
+  }
+}
+
 function createWindow(): void {
   prefs = new PrefsStore(join(app.getPath('userData'), 'prefs.json'));
   const stored = prefs.getAll().window;
@@ -244,6 +268,11 @@ function createWindow(): void {
       switchSurface(index, 'mail');
     },
     (index, identity) => onIdentity(index, identity),
+    (index, input) => handleInput(index, input),
+    (index) => {
+      const email = profiles.find((p) => p.index === index)?.email;
+      return email ? prefs!.getAccount(email).zoom ?? 0 : 0;
+    },
   );
 
   if (DEV_URL) void mainWindow.loadURL(DEV_URL);
@@ -272,6 +301,11 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
     mainWindow = null;
+  });
+
+  mainWindow.webContents.on('before-input-event', (_e, input) => {
+    const active = manager?.activeIndex() ?? 0;
+    handleInput(active, input as unknown as KeyInput);
   });
 }
 
