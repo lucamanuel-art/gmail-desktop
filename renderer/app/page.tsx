@@ -10,6 +10,8 @@ export interface Profile {
   name: string;
   avatarUrl: string;
   color: string;
+  order?: number;
+  label?: string;
 }
 export type Surface = 'mail' | 'calendar';
 
@@ -61,6 +63,8 @@ interface DesktopBridge {
   onUpdateStatus(cb: (status: UpdateStatus) => void): void;
   setAutoStart(v: boolean): void;
   onPrefsChanged(cb: (prefs: Prefs) => void): void;
+  setAccountPref(arg: { email: string; label?: string; notify?: boolean }): void;
+  setAccountOrder(emails: string[]): void;
 }
 
 declare global {
@@ -71,6 +75,10 @@ declare global {
 
 function initial(p: Profile): string {
   return (p.name || p.email || '?').trim().charAt(0).toUpperCase() || '?';
+}
+
+function displayName(p: Profile): string {
+  return (p.label && p.label.trim()) || p.name || p.email;
 }
 
 function CalendarIcon({ className = '' }: { className?: string }) {
@@ -178,7 +186,7 @@ export default function Sidebar() {
               <div className="relative">
                 <button
                   onClick={() => open(p.index, 'mail')}
-                  title={p.email || p.name}
+                  title={displayName(p)}
                   className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition-all duration-150 ${
                     mailActive
                       ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-950'
@@ -208,7 +216,7 @@ export default function Sidebar() {
               </div>
               <button
                 onClick={() => open(p.index, 'calendar')}
-                title={`${p.email || p.name} — Calendar`}
+                title={`${displayName(p)} — Calendar`}
                 className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
                   calActive
                     ? 'bg-white/15 ring-1 ring-white/30'

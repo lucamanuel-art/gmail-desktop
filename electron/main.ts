@@ -16,6 +16,7 @@ import { shouldHideOnClose, createTray } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
 import { resolveShortcut, type KeyInput } from './shortcuts';
 import { openCompose } from './compose-window';
+import { sortByOrder } from './account-order';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -62,8 +63,15 @@ function registerAppProtocol(): void {
   });
 }
 
+function decorate(list: Profile[]): Profile[] {
+  const withPrefs = list.map((p) => {
+    const ap = prefs?.getAccount(p.email) ?? {};
+    return { ...p, order: ap.order, label: ap.label };
+  });
+  return sortByOrder(withPrefs);
+}
 function pushProfiles(): void {
-  mainWindow?.webContents.send(IPC.PROFILES_CHANGED, [...profiles]);
+  mainWindow?.webContents.send(IPC.PROFILES_CHANGED, decorate([...profiles]));
 }
 function pushUnread(): void {
   mainWindow?.webContents.send(IPC.UNREAD_CHANGED, { ...unreadCounts });
@@ -384,6 +392,17 @@ function registerIpc(): void {
     prefs!.setAutoStart(v);
     app.setLoginItemSettings({ openAtLogin: v });
     pushPrefs();
+  });
+  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean }) => {
+    const patch: Record<string, unknown> = {};
+    if ('label' in arg) patch.label = arg.label;
+    if ('notify' in arg) patch.notify = arg.notify;
+    prefs!.setAccount(arg.email, patch);
+    pushProfiles();
+  });
+  ipcMain.on(IPC.SET_ACCOUNT_ORDER, (_e, arg: { emails: string[] }) => {
+    prefs!.setOrder(arg.emails);
+    pushProfiles();
   });
 }
 

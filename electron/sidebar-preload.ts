@@ -7,6 +7,8 @@ interface Profile {
   name: string;
   avatarUrl: string;
   color: string;
+  order?: number;
+  label?: string;
 }
 type Surface = 'mail' | 'calendar';
 
@@ -38,4 +40,8 @@ contextBridge.exposeInMainWorld('desktop', {
   onPrefsChanged: (cb: (prefs: unknown) => void): void => {
     ipcRenderer.on(IPC.PREFS_CHANGED, (_e, p) => cb(p));
   },
+  setAccountPref: (arg: { email: string; label?: string; notify?: boolean }): void =>
+    ipcRenderer.send(IPC.SET_ACCOUNT_PREF, arg),
+  setAccountOrder: (emails: string[]): void =>
+    ipcRenderer.send(IPC.SET_ACCOUNT_ORDER, { emails }),
 });

@@ -15,6 +15,8 @@ export const IPC = {
   UPDATE_DOWNLOAD: 'update:download', // send() — download + auto-install the update
   UPDATE_INSTALL: 'update:install', // send() — restart into an already-downloaded update
   SET_AUTO_START: 'prefs:auto-start', // send(boolean)
+  SET_ACCOUNT_PREF: 'prefs:account', // send({email, label?, notify?})
+  SET_ACCOUNT_ORDER: 'prefs:order', // send({emails: string[]})
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
