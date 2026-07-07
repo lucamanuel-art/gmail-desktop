@@ -300,14 +300,26 @@ export function SettingsPanel({
                         style={{ backgroundColor: c }}
                       />
                     ))}
-                    <label className="flex items-center gap-1 text-xs text-neutral-400" title="Notifications for this account">
-                      <input
-                        type="checkbox"
-                        checked={prefs?.accounts?.[p.email]?.notify !== false}
-                        onChange={(e) => window.desktop?.setAccountPref({ email: p.email, notify: e.target.checked })}
-                        className="h-3.5 w-3.5 accent-blue-600"
-                      />
-                    </label>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title="Mail notifications for this account">
+                        <input
+                          type="checkbox"
+                          checked={prefs?.accounts?.[p.email]?.notify !== false}
+                          onChange={(e) => window.desktop?.setAccountPref({ email: p.email, notify: e.target.checked })}
+                          className="h-3.5 w-3.5 accent-blue-600"
+                        />
+                        Mail
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title="Calendar reminders for this account">
+                        <input
+                          type="checkbox"
+                          checked={prefs?.accounts?.[p.email]?.calendarNotify === true}
+                          onChange={(e) => window.desktop?.setAccountPref({ email: p.email, calendarNotify: e.target.checked })}
+                          className="h-3.5 w-3.5 accent-blue-600"
+                        />
+                        Calendar
+                      </label>
+                    </div>
                     <button
                       onClick={() => setConfirmEmail(p.email)}
                       aria-label="Remove account"

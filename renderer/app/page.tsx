@@ -38,6 +38,7 @@ export interface AccountPref {
   label?: string;
   zoom?: number;
   notify?: boolean;
+  calendarNotify?: boolean;
 }
 export interface Prefs {
   window: { width: number; height: number; x?: number; y?: number; maximized: boolean };
