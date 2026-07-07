@@ -49,6 +49,11 @@ if (typeof document !== 'undefined') {
   // Lazy require avoids bundling issues and keeps the top of the module Node-safe.
   const { ipcRenderer } = require('electron') as typeof import('electron');
 
+  let notifyAllowed = true;
+  ipcRenderer.on(IPC.NOTIFY_ALLOWED, (_e: unknown, allowed: boolean) => {
+    notifyAllowed = allowed;
+  });
+
   const report = () =>
     computeAndReport(document, (channel, count) => ipcRenderer.send(channel, count));
 
@@ -64,6 +69,10 @@ if (typeof document !== 'undefined') {
     const Original = window.Notification;
     if (Original) {
       const Wrapped = function (this: Notification, title: string, options?: NotificationOptions) {
+        if (!notifyAllowed) {
+          // Return a harmless stub so Gmail's code doesn't throw; nothing is shown.
+          return { onclick: null, close() {}, addEventListener() {} } as unknown as Notification;
+        }
         const n = new Original(title, options);
         n.addEventListener('click', () => ipcRenderer.send(IPC.NOTIFICATION_ACTIVATE));
         return n;
