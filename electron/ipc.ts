@@ -17,10 +17,12 @@ export const IPC = {
   SET_AUTO_START: 'prefs:auto-start', // send(boolean)
   SET_ACCOUNT_PREF: 'prefs:account', // send({email, label?, notify?})
   SET_ACCOUNT_ORDER: 'prefs:order', // send({emails: string[]})
+  SET_NOTIFICATIONS: 'prefs:notifications', // send({dnd, quietHours})
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
   UPDATE_STATUS: 'update:status', // { state, currentVersion, version?, percent?, message? }
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
+  NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(boolean)
 } as const;

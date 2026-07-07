@@ -131,4 +131,9 @@ export class ProfileViewManager {
     if (!this.activeKey) return 0;
     return this.views.get(this.activeKey)?.webContents.getZoomLevel() ?? 0;
   }
+
+  pushNotifyAllowed(index: number, allowed: boolean): void {
+    const v = this.views.get(key(index, 'mail'));
+    v?.webContents.send(IPC.NOTIFY_ALLOWED, allowed);
+  }
 }

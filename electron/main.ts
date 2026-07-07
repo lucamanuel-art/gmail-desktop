@@ -17,6 +17,7 @@ import { autoUpdater } from 'electron-updater';
 import { resolveShortcut, type KeyInput } from './shortcuts';
 import { openCompose } from './compose-window';
 import { sortByOrder } from './account-order';
+import { notificationsAllowed } from './notification-policy';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -135,6 +136,7 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
     profiles.push({ index, email: identity.email, name: identity.name, avatarUrl: identity.avatarUrl, color });
     profiles.sort((a, b) => a.index - b.index);
     pushProfiles();
+    refreshNotifyAllowed();
     if (visibleProbe === index) {
       // A freshly added account (via the "+" flow): keep it on screen.
       switchSurface(index, 'mail');
@@ -238,6 +240,20 @@ function handleInput(index: number, input: KeyInput): void {
     const email = profiles.find((p) => p.index === active)?.email;
     if (email) prefs!.setAccount(email, { zoom: clamped });
   }
+}
+
+let notifyTimer: ReturnType<typeof setInterval> | null = null;
+function refreshNotifyAllowed(): void {
+  if (!prefs) return;
+  const p = prefs.getAll();
+  for (const profile of profiles) {
+    manager?.pushNotifyAllowed(profile.index, notificationsAllowed(p, profile.email, new Date()));
+  }
+}
+function startNotifyTimer(): void {
+  if (notifyTimer) return;
+  // Quiet-hours boundaries only change on the minute; re-evaluate each minute.
+  notifyTimer = setInterval(refreshNotifyAllowed, 60_000);
 }
 
 function createWindow(): void {
@@ -399,11 +415,20 @@ function registerIpc(): void {
     if ('notify' in arg) patch.notify = arg.notify;
     prefs!.setAccount(arg.email, patch);
     pushProfiles();
+    refreshNotifyAllowed();
   });
   ipcMain.on(IPC.SET_ACCOUNT_ORDER, (_e, arg: { emails: string[] }) => {
     prefs!.setOrder(arg.emails);
     pushProfiles();
   });
+  ipcMain.on(
+    IPC.SET_NOTIFICATIONS,
+    (_e, arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }) => {
+      prefs!.setNotifications(arg);
+      pushPrefs();
+      refreshNotifyAllowed();
+    },
+  );
 }
 
 // Single-instance: closing the window keeps the process alive in the tray, so a
@@ -427,6 +452,7 @@ app.whenReady().then(() => {
   setupNotifications();
   registerIpc();
   createWindow();
+  startNotifyTimer();
   app.setLoginItemSettings({ openAtLogin: prefs!.getAll().autoStart });
   tray = createTray(ICON_PATH, {
     onOpen: () => mainWindow?.show(),
