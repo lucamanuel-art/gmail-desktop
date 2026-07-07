@@ -9,6 +9,7 @@ interface Profile {
   name: string;
   avatarUrl: string;
   color: string;
+  label?: string;
 }
 
 const SWATCHES = ['#4285F4', '#EA4335', '#34A853', '#FBBC05', '#A142F4', '#00ACC1'];
@@ -199,8 +200,16 @@ export function SettingsPanel({
                       initial(p)
                     )}
                   </span>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    {p.name && <span className="truncate text-sm font-medium">{p.name}</span>}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <input
+                      defaultValue={p.label ?? p.name ?? ''}
+                      placeholder={p.name || p.email}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (p.label ?? p.name ?? '')) window.desktop?.setAccountPref({ email: p.email, label: v });
+                      }}
+                      className="w-full truncate rounded bg-transparent text-sm font-medium outline-none focus:bg-neutral-800 focus:px-2 focus:py-1"
+                    />
                     <span className="truncate text-xs text-neutral-400">{p.email}</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
