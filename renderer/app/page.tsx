@@ -133,6 +133,7 @@ export default function Sidebar() {
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' });
   const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [dragEmail, setDragEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -172,6 +173,16 @@ export default function Sidebar() {
     setSettingsOpen(false);
     window.desktop?.toggleSettings(false);
   }
+  function onDrop(targetEmail: string) {
+    if (!dragEmail || dragEmail === targetEmail) return;
+    const emails = profiles.map((p) => p.email);
+    const from = emails.indexOf(dragEmail);
+    const to = emails.indexOf(targetEmail);
+    if (from < 0 || to < 0) return;
+    emails.splice(to, 0, emails.splice(from, 1)[0]);
+    window.desktop?.setAccountOrder(emails);
+    setDragEmail(null);
+  }
 
   return (
     <div className="flex h-screen w-full bg-neutral-950 text-neutral-200">
@@ -182,7 +193,14 @@ export default function Sidebar() {
           const showImg = p.avatarUrl && !brokenAvatars[p.avatarUrl];
           const count = unread[p.index] ?? 0;
           return (
-            <div key={p.index} className="flex flex-col items-center gap-1.5">
+            <div
+              key={p.index}
+              draggable
+              onDragStart={() => setDragEmail(p.email)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => onDrop(p.email)}
+              className={`flex flex-col items-center gap-1.5 ${dragEmail === p.email ? 'opacity-40' : ''}`}
+            >
               <div className="relative">
                 <button
                   onClick={() => open(p.index, 'mail')}
