@@ -1,8 +1,7 @@
 export const SIDEBAR_WIDTH = 72;
-// Margin around the active Gmail/Calendar view so it reads as a framed card
-// inside the app rather than a raw full-bleed webview. The renderer background
-// shows through this margin as a border.
-export const CONTENT_MARGIN = 10;
+// No margin around the active Gmail/Calendar view: the webview sits flush
+// against the sidebar so there is no dark frame from the renderer background.
+export const CONTENT_MARGIN = 0;
 
 export function contentBounds(win: { width: number; height: number }): {
   x: number;
