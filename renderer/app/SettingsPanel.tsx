@@ -141,6 +141,17 @@ export function SettingsPanel({
               <option value="dark">Dark</option>
             </select>
           </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-sm">When you click a notification</span>
+            <select
+              value={prefs?.notificationOpen ?? 'app'}
+              onChange={(e) => window.desktop?.setNotificationOpen(e.target.value as 'app' | 'window')}
+              className="rounded bg-neutral-200 px-2 py-1 text-sm text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+            >
+              <option value="app">Open in the app</option>
+              <option value="window">Open in a new window</option>
+            </select>
+          </div>
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">

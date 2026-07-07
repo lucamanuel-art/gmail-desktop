@@ -3,6 +3,18 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] — 2026-07-07
+
+### Added
+- Choose how clicking a notification opens its message or event: **in the app**
+  (default — brings the window forward and opens it in place) or **in a new
+  window**. Setting lives under General.
+
+### Fixed
+- Clicking a notification while the app is minimized now restores and focuses
+  the window (with "Open in the app"), instead of leaving it minimized behind a
+  stray window.
+
 ## [0.1.7] — 2026-07-07
 
 ### Fixed

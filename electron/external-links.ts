@@ -10,9 +10,21 @@ import { isInAppUrl, isGoogleUrl } from './google-urls';
 // - top-frame navigation to a non-Google host -> cancelled and opened
 //   externally. Google-to-Google navigation is left alone so login and
 //   internal redirects keep working.
-export function attachExternalLinkHandling(webContents: WebContents): void {
+export function attachExternalLinkHandling(
+  webContents: WebContents,
+  opts?: { getOpenMode?: () => 'app' | 'window'; openInApp?: (url: string) => void },
+): void {
   webContents.setWindowOpenHandler(({ url }) => {
-    if (isInAppUrl(url)) return { action: 'allow' };
+    if (isInAppUrl(url)) {
+      // In-app (Gmail/Calendar/auth) popups — e.g. a clicked notification's
+      // thread. 'app' mode opens it in place and brings the window forward;
+      // 'window' mode keeps the separate window (the previous behaviour).
+      if (opts?.getOpenMode?.() === 'app' && opts.openInApp) {
+        opts.openInApp(url);
+        return { action: 'deny' };
+      }
+      return { action: 'allow' };
+    }
     void shell.openExternal(url);
     return { action: 'deny' };
   });

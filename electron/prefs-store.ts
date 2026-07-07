@@ -25,11 +25,16 @@ export interface WindowPrefs {
   maximized: boolean;
 }
 export type ThemeChoice = 'system' | 'light' | 'dark';
+// How a clicked notification (and any in-app link that opens a new window) is
+// handled: 'app' navigates within the app and brings the window forward;
+// 'window' opens a separate window as before.
+export type NotificationOpen = 'app' | 'window';
 
 export interface Prefs {
   window: WindowPrefs;
   autoStart: boolean;
   theme: ThemeChoice;
+  notificationOpen: NotificationOpen;
   notifications: NotificationPrefs;
   accounts: Record<string, AccountPref>;
 }
@@ -38,6 +43,7 @@ export const DEFAULT_PREFS: Prefs = {
   window: { width: 1200, height: 820, maximized: false },
   autoStart: false,
   theme: 'system',
+  notificationOpen: 'app',
   notifications: { dnd: false, quietHours: { enabled: false, start: '18:00', end: '08:00' } },
   accounts: {},
 };
@@ -54,6 +60,7 @@ export class PrefsStore {
         window: { ...DEFAULT_PREFS.window, ...(raw.window ?? {}) },
         autoStart: typeof raw.autoStart === 'boolean' ? raw.autoStart : DEFAULT_PREFS.autoStart,
         theme: ['system', 'light', 'dark'].includes(raw.theme) ? raw.theme : DEFAULT_PREFS.theme,
+        notificationOpen: raw.notificationOpen === 'window' ? 'window' : 'app',
         notifications: {
           dnd: typeof raw.notifications?.dnd === 'boolean' ? raw.notifications.dnd : false,
           quietHours: { ...DEFAULT_PREFS.notifications.quietHours, ...(raw.notifications?.quietHours ?? {}) },
@@ -80,6 +87,9 @@ export class PrefsStore {
   }
   setTheme(t: ThemeChoice): void {
     this.write({ ...this.getAll(), theme: t });
+  }
+  setNotificationOpen(v: NotificationOpen): void {
+    this.write({ ...this.getAll(), notificationOpen: v });
   }
   setNotifications(n: NotificationPrefs): void {
     this.write({ ...this.getAll(), notifications: n });

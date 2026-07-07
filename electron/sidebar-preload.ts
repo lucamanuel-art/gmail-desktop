@@ -47,4 +47,5 @@ contextBridge.exposeInMainWorld('desktop', {
   setNotifications: (arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void =>
     ipcRenderer.send(IPC.SET_NOTIFICATIONS, arg),
   setTheme: (theme: 'system' | 'light' | 'dark'): void => ipcRenderer.send(IPC.SET_THEME, theme),
+  setNotificationOpen: (v: 'app' | 'window'): void => ipcRenderer.send(IPC.SET_NOTIFICATION_OPEN, v),
 });

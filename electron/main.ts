@@ -320,6 +320,7 @@ function createWindow(): void {
       const email = profiles.find((p) => p.index === index)?.email;
       return email ? prefs!.getAccount(email).zoom ?? 0 : 0;
     },
+    () => prefs?.getAll().notificationOpen ?? 'app',
   );
 
   if (DEV_URL) void mainWindow.loadURL(DEV_URL);
@@ -457,6 +458,10 @@ function registerIpc(): void {
   );
   ipcMain.on(IPC.SET_THEME, (_e, theme: 'system' | 'light' | 'dark') => {
     prefs!.setTheme(theme);
+    pushPrefs();
+  });
+  ipcMain.on(IPC.SET_NOTIFICATION_OPEN, (_e, v: 'app' | 'window') => {
+    prefs!.setNotificationOpen(v);
     pushPrefs();
   });
 }

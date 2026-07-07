@@ -44,6 +44,7 @@ export interface Prefs {
   window: { width: number; height: number; x?: number; y?: number; maximized: boolean };
   autoStart: boolean;
   theme: 'system' | 'light' | 'dark';
+  notificationOpen: 'app' | 'window';
   notifications: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } };
   accounts: Record<string, AccountPref>;
 }
@@ -68,6 +69,7 @@ interface DesktopBridge {
   setAccountOrder(emails: string[]): void;
   setNotifications(arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void;
   setTheme(theme: 'system' | 'light' | 'dark'): void;
+  setNotificationOpen(v: 'app' | 'window'): void;
 }
 
 declare global {

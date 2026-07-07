@@ -35,6 +35,7 @@ export class ProfileViewManager {
     ) => void,
     private readonly onInput: (index: number, input: KeyInput) => void,
     private readonly getZoom: (index: number) => number,
+    private readonly getOpenMode: () => 'app' | 'window',
   ) {
     this.win.on('resize', () => this.relayout());
   }
@@ -53,7 +54,13 @@ export class ProfileViewManager {
         backgroundThrottling: surface === 'calendar' ? false : true,
       },
     });
-    attachExternalLinkHandling(view.webContents);
+    attachExternalLinkHandling(view.webContents, {
+      getOpenMode: this.getOpenMode,
+      openInApp: (url) => {
+        this.onActivate(index, surface);
+        void view.webContents.loadURL(url);
+      },
+    });
     view.webContents.on('ipc-message', (_e, channel, ...args) => {
       if (surface === 'mail') {
         if (channel === IPC.UNREAD_UPDATE) this.onUnread(index, Number(args[0]) || 0);
