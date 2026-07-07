@@ -433,6 +433,10 @@ function registerIpc(): void {
       refreshNotifyAllowed();
     },
   );
+  ipcMain.on(IPC.SET_THEME, (_e, theme: 'system' | 'light' | 'dark') => {
+    prefs!.setTheme(theme);
+    pushPrefs();
+  });
 }
 
 // Single-instance: closing the window keeps the process alive in the tray, so a

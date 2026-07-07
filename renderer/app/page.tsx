@@ -66,6 +66,7 @@ interface DesktopBridge {
   setAccountPref(arg: { email: string; label?: string; notify?: boolean }): void;
   setAccountOrder(emails: string[]): void;
   setNotifications(arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void;
+  setTheme(theme: 'system' | 'light' | 'dark'): void;
 }
 
 declare global {
@@ -152,6 +153,21 @@ export default function Sidebar() {
     bridge.onUpdateStatus(setUpdate);
     bridge.onPrefsChanged((p) => setPrefs(p as Prefs));
   }, []);
+
+  useEffect(() => {
+    const choice = prefs?.theme ?? 'system';
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark = choice === 'dark' || (choice === 'system' && mq.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.classList.toggle('light', !dark);
+    };
+    apply();
+    if (choice === 'system') {
+      mq.addEventListener('change', apply);
+      return () => mq.removeEventListener('change', apply);
+    }
+  }, [prefs?.theme]);
 
   function open(index: number, surface: Surface) {
     if (settingsOpen) setSettingsOpen(false);

@@ -46,4 +46,5 @@ contextBridge.exposeInMainWorld('desktop', {
     ipcRenderer.send(IPC.SET_ACCOUNT_ORDER, { emails }),
   setNotifications: (arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void =>
     ipcRenderer.send(IPC.SET_NOTIFICATIONS, arg),
+  setTheme: (theme: 'system' | 'light' | 'dark'): void => ipcRenderer.send(IPC.SET_THEME, theme),
 });

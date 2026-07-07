@@ -18,6 +18,7 @@ export const IPC = {
   SET_ACCOUNT_PREF: 'prefs:account', // send({email, label?, notify?})
   SET_ACCOUNT_ORDER: 'prefs:order', // send({emails: string[]})
   SET_NOTIFICATIONS: 'prefs:notifications', // send({dnd, quietHours})
+  SET_THEME: 'prefs:theme', // send('system'|'light'|'dark')
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
