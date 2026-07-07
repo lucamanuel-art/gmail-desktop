@@ -6,6 +6,7 @@ export interface AccountPref {
   label?: string;
   zoom?: number;
   notify?: boolean;
+  calendarNotify?: boolean;
 }
 export interface QuietHours {
   enabled: boolean;

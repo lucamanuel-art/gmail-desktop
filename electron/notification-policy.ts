@@ -13,12 +13,21 @@ export function inQuietHours(start: string, end: string, minutes: number): boole
   return minutes >= s || minutes < e; // crosses midnight
 }
 
-export function notificationsAllowed(prefs: Prefs, email: string, now: Date): boolean {
+export function notificationsAllowed(
+  prefs: Prefs,
+  email: string,
+  now: Date,
+  surface: 'mail' | 'calendar' = 'mail',
+): boolean {
   const { dnd, quietHours } = prefs.notifications;
   if (dnd) return false;
-  if (quietHours.enabled && inQuietHours(quietHours.start, quietHours.end, now.getHours() * 60 + now.getMinutes())) {
+  if (
+    quietHours.enabled &&
+    inQuietHours(quietHours.start, quietHours.end, now.getHours() * 60 + now.getMinutes())
+  ) {
     return false;
   }
-  if (prefs.accounts[email]?.notify === false) return false;
-  return true;
+  const account = prefs.accounts[email];
+  if (surface === 'calendar') return account?.calendarNotify === true;
+  return account?.notify !== false;
 }

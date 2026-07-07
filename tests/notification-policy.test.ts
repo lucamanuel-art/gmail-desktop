@@ -41,3 +41,45 @@ describe('notificationsAllowed', () => {
     expect(notificationsAllowed(p, 'b@x.com', at(12))).toBe(true);
   });
 });
+
+describe('notificationsAllowed — surface', () => {
+  const base = () => structuredClone(DEFAULT_PREFS);
+
+  it("defaults to the mail surface", () => {
+    const p = base();
+    expect(notificationsAllowed(p, 'a@x.com', at(12))).toBe(true); // no 4th arg → mail
+  });
+
+  it('mail: allowed unless notify===false', () => {
+    const p = base();
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'mail')).toBe(true);
+    p.accounts['a@x.com'] = { notify: false };
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'mail')).toBe(false);
+  });
+
+  it('calendar: off by default, on only when calendarNotify===true', () => {
+    const p = base();
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'calendar')).toBe(false); // opt-in
+    p.accounts['a@x.com'] = { calendarNotify: true };
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'calendar')).toBe(true);
+  });
+
+  it('calendar toggle is independent of mail toggle', () => {
+    const p = base();
+    p.accounts['a@x.com'] = { notify: false, calendarNotify: true };
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'mail')).toBe(false);
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'calendar')).toBe(true);
+  });
+
+  it('DND and quiet hours gate calendar too', () => {
+    const dnd = base();
+    dnd.notifications.dnd = true;
+    dnd.accounts['a@x.com'] = { calendarNotify: true };
+    expect(notificationsAllowed(dnd, 'a@x.com', at(12), 'calendar')).toBe(false);
+
+    const qh = base();
+    qh.notifications.quietHours = { enabled: true, start: '18:00', end: '08:00' };
+    qh.accounts['a@x.com'] = { calendarNotify: true };
+    expect(notificationsAllowed(qh, 'a@x.com', at(23), 'calendar')).toBe(false);
+  });
+});
