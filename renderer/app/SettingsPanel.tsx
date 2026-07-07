@@ -320,8 +320,8 @@ export function SettingsPanel({
                 </div>
 
                 {confirmEmail === p.email && (
-                  <div className="flex items-center justify-between gap-3 rounded-lg bg-red-950/40 px-3 py-2">
-                    <span className="text-xs text-red-200">
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-red-100 px-3 py-2 dark:bg-red-950/40">
+                    <span className="text-xs text-red-700 dark:text-red-200">
                       Remove this account from the app? It stays signed in with Google — re-add it
                       later with the <span className="font-semibold">+</span> button.
                     </span>
