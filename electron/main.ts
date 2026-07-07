@@ -413,10 +413,11 @@ function registerIpc(): void {
     app.setLoginItemSettings({ openAtLogin: v });
     pushPrefs();
   });
-  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean }) => {
+  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean }) => {
     const patch: Record<string, unknown> = {};
     if ('label' in arg) patch.label = arg.label;
     if ('notify' in arg) patch.notify = arg.notify;
+    if ('calendarNotify' in arg) patch.calendarNotify = arg.calendarNotify;
     prefs!.setAccount(arg.email, patch);
     pushProfiles();
     refreshNotifyAllowed();

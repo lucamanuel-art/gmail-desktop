@@ -63,7 +63,7 @@ interface DesktopBridge {
   onUpdateStatus(cb: (status: UpdateStatus) => void): void;
   setAutoStart(v: boolean): void;
   onPrefsChanged(cb: (prefs: Prefs) => void): void;
-  setAccountPref(arg: { email: string; label?: string; notify?: boolean }): void;
+  setAccountPref(arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean }): void;
   setAccountOrder(emails: string[]): void;
   setNotifications(arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void;
   setTheme(theme: 'system' | 'light' | 'dark'): void;

@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld('desktop', {
   onPrefsChanged: (cb: (prefs: unknown) => void): void => {
     ipcRenderer.on(IPC.PREFS_CHANGED, (_e, p) => cb(p));
   },
-  setAccountPref: (arg: { email: string; label?: string; notify?: boolean }): void =>
+  setAccountPref: (arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean }): void =>
     ipcRenderer.send(IPC.SET_ACCOUNT_PREF, arg),
   setAccountOrder: (emails: string[]): void =>
     ipcRenderer.send(IPC.SET_ACCOUNT_ORDER, { emails }),
