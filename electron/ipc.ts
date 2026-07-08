@@ -18,6 +18,7 @@ export const IPC = {
   SET_ACCOUNT_PREF: 'prefs:account', // send({email, label?, notify?})
   SET_ACCOUNT_ORDER: 'prefs:order', // send({emails: string[]})
   SET_NOTIFICATIONS: 'prefs:notifications', // send({dnd, quietHours})
+  SET_SNOOZE: 'prefs:snooze', // send(minutes: number | null) — >0 timed snooze, null = mute indefinitely, 0 = clear
   SET_THEME: 'prefs:theme', // send('system'|'light'|'dark')
   SET_NOTIFICATION_OPEN: 'prefs:notification-open', // send('app'|'window')
   // main -> renderer (sidebar)

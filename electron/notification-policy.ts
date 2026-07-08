@@ -19,8 +19,9 @@ export function notificationsAllowed(
   now: Date,
   surface: 'mail' | 'calendar' = 'mail',
 ): boolean {
-  const { dnd, quietHours } = prefs.notifications;
+  const { dnd, dndUntil, quietHours } = prefs.notifications;
   if (dnd) return false;
+  if (dndUntil && now.getTime() < dndUntil) return false;
   if (
     quietHours.enabled &&
     inQuietHours(quietHours.start, quietHours.end, now.getHours() * 60 + now.getMinutes())

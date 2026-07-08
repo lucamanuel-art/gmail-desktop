@@ -12,7 +12,7 @@ import { planNext } from './detection-planner';
 import { addAccountUrl } from './google-urls';
 import { applyBadge } from './badge-controller';
 import { IPC } from './ipc';
-import { shouldHideOnClose, createTray } from './tray-controller';
+import { shouldHideOnClose, createTray, updateTrayMenu, type TrayState, type TrayUpdateStatus } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
 import { resolveShortcut, type KeyInput } from './shortcuts';
 import { openCompose, openFullThreadWindow } from './compose-window';
@@ -246,8 +246,16 @@ function handleInput(index: number, input: KeyInput): void {
 let notifyTimer: ReturnType<typeof setInterval> | null = null;
 function refreshNotifyAllowed(): void {
   if (!prefs) return;
-  const p = prefs.getAll();
+  let p = prefs.getAll();
   const now = new Date();
+  // Auto-expire a timed snooze on the minute tick so the gate reopens and the
+  // tray label/checkbox don't keep showing a time that's already passed.
+  if (p.notifications.dndUntil && now.getTime() >= p.notifications.dndUntil) {
+    prefs.setNotifications({ ...p.notifications, dndUntil: undefined });
+    p = prefs.getAll();
+    pushPrefs();
+    refreshTray();
+  }
   for (const profile of profiles) {
     manager?.pushNotifyAllowed(profile.index, 'mail', notificationsAllowed(p, profile.email, now, 'mail'));
     manager?.pushNotifyAllowed(profile.index, 'calendar', notificationsAllowed(p, profile.email, now, 'calendar'));
@@ -387,6 +395,74 @@ function createWindow(): void {
 function sendUpdate(status: Record<string, unknown>): void {
   lastUpdateStatus = { ...status, currentVersion: app.getVersion() };
   mainWindow?.webContents.send(IPC.UPDATE_STATUS, lastUpdateStatus);
+  refreshTray(); // keep the tray's update label in sync with each status transition
+}
+
+// Update / autostart / snooze actions are factored out so both the IPC handlers
+// (settings UI) and the tray menu invoke the exact same logic.
+function checkForUpdate(): void {
+  if (!app.isPackaged) return sendUpdate({ state: 'dev' });
+  sendUpdate({ state: 'checking' });
+  autoUpdater
+    .checkForUpdates()
+    .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+}
+function downloadUpdate(): void {
+  updateRequested = true;
+  autoUpdater
+    .downloadUpdate()
+    .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+}
+function installUpdate(): void {
+  isQuitting = true;
+  autoUpdater.quitAndInstall();
+}
+function setAutoStart(v: boolean): void {
+  prefs!.setAutoStart(v);
+  app.setLoginItemSettings({ openAtLogin: v });
+  pushPrefs();
+  refreshTray();
+}
+// minutes: a positive number sets a timed snooze; null mutes indefinitely
+// ("until I turn it back on"); 0 clears any active mute.
+function setSnooze(minutes: number | null): void {
+  if (!prefs) return;
+  const n = prefs.getAll().notifications;
+  if (minutes === null) prefs.setNotifications({ ...n, dnd: true, dndUntil: undefined });
+  else if (minutes <= 0) prefs.setNotifications({ ...n, dnd: false, dndUntil: undefined });
+  else prefs.setNotifications({ ...n, dnd: false, dndUntil: Date.now() + minutes * 60_000 });
+  pushPrefs();
+  refreshNotifyAllowed();
+  refreshTray();
+}
+function clearSnooze(): void {
+  setSnooze(0);
+}
+
+function getTrayState(): TrayState {
+  const p = prefs?.getAll();
+  return {
+    onOpen: () => mainWindow?.show(),
+    onQuit: () => {
+      isQuitting = true;
+      app.quit();
+    },
+    isPackaged: app.isPackaged,
+    updateStatus: lastUpdateStatus as unknown as TrayUpdateStatus,
+    onCheckUpdate: checkForUpdate,
+    onDownloadUpdate: downloadUpdate,
+    onInstallUpdate: installUpdate,
+    autoStart: p?.autoStart ?? false,
+    onToggleAutoStart: setAutoStart,
+    dnd: p?.notifications.dnd ?? false,
+    dndUntil: p?.notifications.dndUntil,
+    now: Date.now(),
+    onSnooze: setSnooze,
+    onClearSnooze: clearSnooze,
+  };
+}
+function refreshTray(): void {
+  if (tray) updateTrayMenu(tray, getTrayState());
 }
 
 function setupUpdater(): void {
@@ -433,33 +509,16 @@ function registerIpc(): void {
     }
   });
   ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => removeAccount(arg.email));
-  ipcMain.on(IPC.UPDATE_CHECK, () => {
-    if (!app.isPackaged) return sendUpdate({ state: 'dev' });
-    sendUpdate({ state: 'checking' });
-    autoUpdater
-      .checkForUpdates()
-      .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
-  });
-  ipcMain.on(IPC.UPDATE_DOWNLOAD, () => {
-    updateRequested = true;
-    autoUpdater
-      .downloadUpdate()
-      .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
-  });
-  ipcMain.on(IPC.UPDATE_INSTALL, () => {
-    isQuitting = true;
-    autoUpdater.quitAndInstall();
-  });
+  ipcMain.on(IPC.UPDATE_CHECK, () => checkForUpdate());
+  ipcMain.on(IPC.UPDATE_DOWNLOAD, () => downloadUpdate());
+  ipcMain.on(IPC.UPDATE_INSTALL, () => installUpdate());
   ipcMain.on(IPC.SETTINGS_TOGGLE, (_e, arg: { open: boolean }) => {
     settingsPanelOpen = arg.open;
     if (arg.open) manager?.hideAll();
     else manager?.showActive();
   });
-  ipcMain.on(IPC.SET_AUTO_START, (_e, v: boolean) => {
-    prefs!.setAutoStart(v);
-    app.setLoginItemSettings({ openAtLogin: v });
-    pushPrefs();
-  });
+  ipcMain.on(IPC.SET_AUTO_START, (_e, v: boolean) => setAutoStart(v));
+  ipcMain.on(IPC.SET_SNOOZE, (_e, minutes: number | null) => setSnooze(minutes));
   ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean }) => {
     const patch: Record<string, unknown> = {};
     if ('label' in arg) patch.label = arg.label;
@@ -481,6 +540,7 @@ function registerIpc(): void {
       prefs!.setNotifications(arg);
       pushPrefs();
       refreshNotifyAllowed();
+      refreshTray(); // a settings-driven DND change should re-label the tray too
     },
   );
   ipcMain.on(IPC.SET_THEME, (_e, theme: 'system' | 'light' | 'dark') => {
@@ -516,14 +576,7 @@ app.whenReady().then(() => {
   createWindow();
   startNotifyTimer();
   app.setLoginItemSettings({ openAtLogin: prefs!.getAll().autoStart });
-  tray = createTray(ICON_PATH, {
-    onOpen: () => mainWindow?.show(),
-    onQuit: () => {
-      isQuitting = true;
-      app.quit();
-    },
-  });
-  void tray;
+  tray = createTray(ICON_PATH, getTrayState());
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

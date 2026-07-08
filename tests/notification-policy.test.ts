@@ -40,6 +40,28 @@ describe('notificationsAllowed', () => {
     const p = prefs({ accounts: { 'a@x.com': { notify: false }, 'b@x.com': { notify: true } } });
     expect(notificationsAllowed(p, 'b@x.com', at(12))).toBe(true);
   });
+
+  it('blocks while a timed snooze (dndUntil) is still in the future', () => {
+    const p = prefs({
+      notifications: { dnd: false, dndUntil: at(12, 30).getTime(), quietHours: { enabled: false, start: '18:00', end: '08:00' } },
+    });
+    expect(notificationsAllowed(p, 'a@x.com', at(12))).toBe(false); // 12:00 < 12:30
+  });
+
+  it('allows again once dndUntil has passed', () => {
+    const p = prefs({
+      notifications: { dnd: false, dndUntil: at(11, 30).getTime(), quietHours: { enabled: false, start: '18:00', end: '08:00' } },
+    });
+    expect(notificationsAllowed(p, 'a@x.com', at(12))).toBe(true); // 12:00 > 11:30
+  });
+
+  it('a snooze gates the calendar surface too', () => {
+    const p = prefs({
+      notifications: { dnd: false, dndUntil: at(13).getTime(), quietHours: { enabled: false, start: '18:00', end: '08:00' } },
+      accounts: { 'a@x.com': { calendarNotify: true } },
+    });
+    expect(notificationsAllowed(p, 'a@x.com', at(12), 'calendar')).toBe(false);
+  });
 });
 
 describe('notificationsAllowed — surface', () => {

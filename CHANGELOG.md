@@ -5,6 +5,16 @@ to [Semantic Versioning](https://semver.org/).
 
 ## [0.1.9] — 2026-07-08
 
+### Toegevoegd
+- Het menu bij het systeemvak-icoon (rechtsklik) kan nu meer:
+  - **Meldingen tijdelijk dempen** — voor 10, 30 of 60 minuten, of "totdat ik ze
+    weer aanzet". Het menu laat zien tot hoe laat het stil is; na afloop komen de
+    meldingen vanzelf weer binnen. "Meldingen aanzetten" heft het dempen meteen op.
+  - **Controleren op updates** — met een label dat meebeweegt met de status
+    (beschikbaar, downloaden, opnieuw opstarten om te installeren, …).
+  - **Opstarten bij inloggen** — een vinkje dat gelijk loopt met dezelfde
+    instelling in het instellingenscherm.
+
 ### Opgelost
 - Herinneringen uit Google Agenda komen nu ook echt binnen als melding op je
   computer. Eerst stuurde de agenda die herinneringen op een manier weg die de

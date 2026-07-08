@@ -100,7 +100,16 @@ Aanpak (uit scoping): volg het bestaande surface-patroon (`/u/<N>/` per account)
   plekken, zodat een ontbrekende surface een TS-fout is i.p.v. stille `else`-doorval.
 - Volledige scoping stond in `.superpowers/sdd/scoping-google-apps.md` (gitignored scratch).
 
-## Backlog-feature B: Tray-menu-uitbreidingen
+## Backlog-feature B: Tray-menu-uitbreidingen  ✅ GEÏMPLEMENTEERD (branch `worktree-tray-menu-enhancements`)
+
+Alle drie de items zijn gebouwd volgens de scoping-aanbevelingen: `createTray` bouwt het menu niet meer
+statisch — `buildTrayMenu(state)` + `updateTrayMenu(tray, state)` + een pure `trayMenuTemplate(state)`
+(unit-getest zonder Electron). `dndUntil?: number` toegevoegd aan `NotificationPrefs` (defensief ingelezen
+in `PrefsStore.getAll`), `notificationsAllowed` gate uitgebreid, en de 60s `refreshNotifyAllowed`-tick ruimt
+een verlopen snooze zelf op + herbouwt het tray-menu. Nieuw IPC `SET_SNOOZE`. Update/autostart/snooze-logica
+is gefactoreerd zodat tray én instellingen exact dezelfde functie aanroepen. Tests:
+`tests/tray-controller.test.ts` (+ uitbreidingen in `notification-policy` / `prefs-store`). Nog te doen:
+Windows-smoke-test van het echte tray-menu (in WSLg niet te draaien).
 
 Drie items (uit scoping):
 
