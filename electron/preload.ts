@@ -36,6 +36,30 @@ export function extractIdentity(
   return { email, name, avatarUrl };
 }
 
+// Gmail's new-mail notifications carry no thread id (tag = account email, data
+// = null) and Gmail's own click handler never opens the message inside the
+// wrapper (verified: it runs but no-ops even with user activation). The inbox
+// list DOM marks each row's subject span with data-legacy-thread-id, so the
+// notification body (= subject) identifies the thread to open. Rows are
+// newest-first; the first match is the message that fired the notification.
+export function findThreadIdBySubject(
+  doc: { querySelectorAll(sel: string): ArrayLike<any> },
+  subject: string,
+): string | null {
+  const wanted = (subject || '').trim();
+  if (!wanted) return null;
+  // Gmail may ellipsize long subjects in the notification body.
+  const ellipsized = /(…|\.\.\.)$/.test(wanted);
+  const prefix = wanted.replace(/(…|\.\.\.)$/, '');
+  for (const el of Array.from(doc.querySelectorAll('[data-legacy-thread-id]'))) {
+    const id = el.getAttribute('data-legacy-thread-id');
+    if (!id) continue;
+    const text = (el.textContent || '').trim();
+    if (text === wanted || (ellipsized && text.startsWith(prefix))) return id;
+  }
+  return null;
+}
+
 export function isEditableTarget(
   el: { tagName?: string; isContentEditable?: boolean } | null | undefined,
 ): boolean {
@@ -74,7 +98,11 @@ if (typeof document !== 'undefined') {
           return { onclick: null, close() {}, addEventListener() {} } as unknown as Notification;
         }
         const n = new Original(title, options);
-        n.addEventListener('click', () => ipcRenderer.send(IPC.NOTIFICATION_ACTIVATE));
+        n.addEventListener('click', () => {
+          // Resolve the clicked thread at click time (the row exists by then).
+          const threadId = findThreadIdBySubject(document, options?.body ?? '');
+          ipcRenderer.send(IPC.NOTIFICATION_ACTIVATE, threadId ?? undefined);
+        });
         return n;
       } as unknown as typeof Notification;
       // Delegate `permission` live via a getter — copying it once freezes it at

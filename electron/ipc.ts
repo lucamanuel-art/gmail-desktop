@@ -2,7 +2,7 @@
 export const IPC = {
   // Gmail view -> main
   UNREAD_UPDATE: 'unread:update', // send(count:number)
-  NOTIFICATION_ACTIVATE: 'notification:activate', // send()
+  NOTIFICATION_ACTIVATE: 'notification:activate', // send(threadId?: string) — clicked notification's thread when resolvable
   ACCOUNT_IDENTITY: 'account:identity', // send({email,name,avatarUrl})
   // renderer (sidebar) -> main
   SWITCH_SURFACE: 'switch:surface', // send({index, surface:'mail'|'calendar'})

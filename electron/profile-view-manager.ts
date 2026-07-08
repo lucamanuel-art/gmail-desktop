@@ -28,7 +28,7 @@ export class ProfileViewManager {
     private readonly win: BrowserWindow,
     private readonly preloadPath: string,
     private readonly onUnread: (index: number, count: number) => void,
-    private readonly onActivate: (index: number, surface: Surface) => void,
+    private readonly onActivate: (index: number, surface: Surface, threadId?: string) => void,
     private readonly onIdentity: (
       index: number,
       identity: { email: string; name: string; avatarUrl: string },
@@ -66,7 +66,9 @@ export class ProfileViewManager {
         if (channel === IPC.UNREAD_UPDATE) this.onUnread(index, Number(args[0]) || 0);
         else if (channel === IPC.ACCOUNT_IDENTITY) this.onIdentity(index, args[0]);
       }
-      if (channel === IPC.NOTIFICATION_ACTIVATE) this.onActivate(index, surface);
+      if (channel === IPC.NOTIFICATION_ACTIVATE) {
+        this.onActivate(index, surface, typeof args[0] === 'string' ? args[0] : undefined);
+      }
     });
     void view.webContents.loadURL(
       urlOverride ?? (surface === 'mail' ? mailUrl(index) : calendarUrl(index)),
@@ -74,6 +76,15 @@ export class ProfileViewManager {
     view.webContents.on('before-input-event', (_e, input) => this.onInput(index, input as unknown as KeyInput));
     view.webContents.on('did-finish-load', () => {
       view.webContents.setZoomLevel(this.getZoom(index));
+    });
+    // A Google page can close itself (e.g. Gmail's full-page compose calls
+    // window.close() after sending). Drop the dead view from the map so timers
+    // like refreshNotifyAllowed don't crash on a destroyed webContents.
+    view.webContents.once('destroyed', () => {
+      if (this.views.get(k) !== view) return;
+      this.win.contentView.removeChildView(view);
+      this.views.delete(k);
+      if (this.activeKey === k) this.activeKey = null;
     });
     this.win.contentView.addChildView(view);
     view.setVisible(false);
@@ -146,8 +157,17 @@ export class ProfileViewManager {
     return this.views.get(this.activeKey)?.webContents.getZoomLevel() ?? 0;
   }
 
+  // Opens a specific Gmail thread in the account's mail view via a hash-only
+  // navigation (instant SPA route, no reload).
+  openMailThread(index: number, threadId: string): void {
+    const wc = this.views.get(key(index, 'mail'))?.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    void wc.executeJavaScript(`location.hash = ${JSON.stringify(`#inbox/${threadId}`)}`);
+  }
+
   pushNotifyAllowed(index: number, surface: Surface, allowed: boolean): void {
-    const v = this.views.get(key(index, surface));
-    v?.webContents.send(IPC.NOTIFY_ALLOWED, allowed);
+    const wc = this.views.get(key(index, surface))?.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    wc.send(IPC.NOTIFY_ALLOWED, allowed);
   }
 }

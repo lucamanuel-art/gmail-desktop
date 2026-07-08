@@ -15,7 +15,7 @@ import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
 import { resolveShortcut, type KeyInput } from './shortcuts';
-import { openCompose } from './compose-window';
+import { openCompose, openThreadWindow } from './compose-window';
 import { sortByOrder } from './account-order';
 import { notificationsAllowed } from './notification-policy';
 
@@ -302,7 +302,13 @@ function createWindow(): void {
       pushUnread();
       applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
-    (index, surface) => {
+    (index, surface, threadId) => {
+      // "Open in a new window" mode: a clicked mail notification opens its
+      // thread in a separate window; the main window is left as-is.
+      if (threadId && surface === 'mail' && prefs?.getAll().notificationOpen === 'window') {
+        openThreadWindow(index, threadId);
+        return;
+      }
       if (mainWindow) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.show();
@@ -313,6 +319,8 @@ function createWindow(): void {
         mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
       }
       switchSurface(index, surface);
+      // "In the app" mode: also open the clicked thread in that mail view.
+      if (threadId && surface === 'mail') manager?.openMailThread(index, threadId);
     },
     (index, identity) => onIdentity(index, identity),
     (index, input) => handleInput(index, input),

@@ -17,3 +17,16 @@ export function openCompose(index: number): void {
   attachExternalLinkHandling(win.webContents);
   void win.loadURL(`https://mail.google.com/mail/u/${index}/?view=cm&fs=1&tf=1`);
 }
+
+// Opens a specific Gmail thread in its own window ("Open in a new window"
+// notification-click mode) on the shared Google session.
+export function openThreadWindow(index: number, threadId: string): void {
+  const win = new BrowserWindow({
+    width: 960,
+    height: 800,
+    backgroundColor: '#ffffff',
+    webPreferences: { partition: SESSION_PARTITION, contextIsolation: true },
+  });
+  attachExternalLinkHandling(win.webContents);
+  void win.loadURL(`https://mail.google.com/mail/u/${index}/#inbox/${threadId}`);
+}
