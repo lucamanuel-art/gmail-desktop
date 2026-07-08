@@ -60,6 +60,28 @@ export function findThreadIdBySubject(
   return null;
 }
 
+// Google Calendar fires event reminders through ServiceWorkerRegistration.
+// showNotification ("persistent" notifications), which Electron never displays
+// (electron/electron#13041) and which would bypass the notify-allowed gate and
+// click routing below. Reroute them through window.Notification — resolved at
+// call time so the gated wrapper installed later is the one that runs.
+export function rerouteServiceWorkerNotifications(
+  swRegProto:
+    | { showNotification?: (title: string, options?: NotificationOptions) => Promise<void> }
+    | undefined,
+  getNotification: () => typeof Notification,
+): void {
+  if (!swRegProto || typeof swRegProto.showNotification !== 'function') return;
+  swRegProto.showNotification = function (title: string, options?: NotificationOptions) {
+    // `actions` (and only it) is rejected by the non-persistent constructor.
+    const { actions: _actions, ...rest } = (options ?? {}) as NotificationOptions & {
+      actions?: unknown;
+    };
+    new (getNotification())(title, rest);
+    return Promise.resolve();
+  };
+}
+
 export function isEditableTarget(
   el: { tagName?: string; isContentEditable?: boolean } | null | undefined,
 ): boolean {
@@ -137,6 +159,11 @@ if (typeof document !== 'undefined') {
       Wrapped.requestPermission = Original.requestPermission.bind(Original);
       window.Notification = Wrapped;
     }
+
+    rerouteServiceWorkerNotifications(
+      typeof ServiceWorkerRegistration !== 'undefined' ? ServiceWorkerRegistration.prototype : undefined,
+      () => window.Notification,
+    );
 
     // Poll for the signed-in identity and report it once found.
     let identityTries = 0;
