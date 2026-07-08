@@ -1,11 +1,11 @@
 import { BrowserWindow, WebContentsView } from 'electron';
 import { contentBounds } from './layout';
 import { IPC } from './ipc';
-import { mailUrl, calendarUrl } from './google-urls';
 import { attachExternalLinkHandling } from './external-links';
 import type { KeyInput } from './shortcuts';
+import { SURFACES, SURFACE_CONFIG, surfaceForUrl, type Surface } from '../renderer/lib/surfaces';
 
-export type Surface = 'mail' | 'calendar';
+export type { Surface };
 
 export interface Profile {
   index: number;
@@ -60,15 +60,12 @@ export class ProfileViewManager {
         preload: this.preloadPath,
         partition: SESSION_PARTITION,
         contextIsolation: false,
-        backgroundThrottling: surface === 'calendar' ? false : true,
+        backgroundThrottling: SURFACE_CONFIG[surface].backgroundThrottling,
       },
     });
     attachExternalLinkHandling(view.webContents, {
       getOpenMode: this.getOpenMode,
-      openInApp: (url) => {
-        this.onActivate(index, surface);
-        void view.webContents.loadURL(url);
-      },
+      openInApp: (url) => this.openInOwningSurface(index, surface, url),
       isNotificationClickInFlight: () => Date.now() < (this.notifClickUntil.get(k) ?? 0),
       isPopoutExpected: () => Date.now() < (this.popoutExpectUntil.get(k) ?? 0),
     });
@@ -81,9 +78,7 @@ export class ProfileViewManager {
         this.onActivate(index, surface, typeof args[0] === 'string' ? args[0] : undefined);
       }
     });
-    void view.webContents.loadURL(
-      urlOverride ?? (surface === 'mail' ? mailUrl(index) : calendarUrl(index)),
-    );
+    void view.webContents.loadURL(urlOverride ?? SURFACE_CONFIG[surface].url(index));
     view.webContents.on('before-input-event', (_e, input) => this.onInput(index, input as unknown as KeyInput));
     view.webContents.on('did-finish-load', () => {
       view.webContents.setZoomLevel(this.getZoom(index));
@@ -168,8 +163,21 @@ export class ProfileViewManager {
     view.setBounds(contentBounds({ width, height }));
   }
 
+  // An in-app popup opens in the view of the surface that owns its URL (a Docs
+  // link in an email must not replace the mail view with the document); URLs no
+  // surface owns (e.g. an accounts.google.com popup) load in the view that
+  // opened them, as before.
+  private openInOwningSurface(index: number, from: Surface, url: string): void {
+    const target = surfaceForUrl(url) ?? from;
+    this.ensureView(index, target, false);
+    const wc = this.views.get(key(index, target))?.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    void wc.loadURL(url);
+    this.onActivate(index, target); // brings the window forward and shows the surface
+  }
+
   setZoomForIndex(index: number, level: number): void {
-    for (const surface of ['mail', 'calendar'] as Surface[]) {
+    for (const surface of SURFACES) {
       const v = this.views.get(key(index, surface));
       if (v) v.webContents.setZoomLevel(level);
     }
