@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Prefs } from './page';
+import type { ChangelogEntry, ChangelogVersion } from './changelog-types';
 import { advanceReneSequence, isCompleteTime, RENE_SEQUENCE } from './settings-utils';
 import { getStrings, type UiStrings } from './strings';
 
@@ -73,6 +74,68 @@ function TrashIcon({ className = '' }: { className?: string }) {
   );
 }
 
+// Show the changelog entries for the current UI language. The file mixes
+// English (### Fixed) and Dutch (### Opgelost) within a version; prefer the
+// entries matching the UI, and fall back to the other language when a version
+// has none. Prose-only versions (no ### headings) are shown as-is.
+function entriesForLang(v: ChangelogVersion, uiLang: 'en' | 'nl'): ChangelogEntry[] {
+  const hasLangTagged = v.entries.some((e) => e.lang !== 'unknown');
+  if (!hasLangTagged) return v.entries;
+  const matching = v.entries.filter((e) => e.lang === uiLang);
+  if (matching.length) return matching;
+  return v.entries.filter((e) => e.lang !== 'unknown');
+}
+
+// Minimal inline markdown: render **bold** spans, leave the rest as text.
+function renderInline(text: string): ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    ),
+  );
+}
+
+function ChangelogVersionBlock({
+  version,
+  uiLang,
+  S,
+}: {
+  version: ChangelogVersion;
+  uiLang: 'en' | 'nl';
+  S: UiStrings;
+}) {
+  const entries = entriesForLang(version, uiLang);
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline gap-2">
+        <span className="text-sm font-semibold">
+          {S.changelogVersionPrefix} {version.version}
+        </span>
+        {version.date && <span className="text-xs text-neutral-400">{version.date}</span>}
+      </div>
+      {entries.map((entry, ei) => {
+        const label = S.changelogCategory(entry.heading);
+        return (
+          <div key={ei} className="mb-2 last:mb-0">
+            {label && (
+              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                {label}
+              </div>
+            )}
+            <ul className="list-disc space-y-1 pl-5 text-sm text-neutral-700 dark:text-neutral-300">
+              {entry.items.map((item, ii) => (
+                <li key={ii}>{renderInline(item)}</li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SettingsPanel({
   profiles,
   onClose,
@@ -104,6 +167,23 @@ export function SettingsPanel({
 
   const rene = prefs?.reneMode === true;
   const S = getStrings(rene);
+  const uiLang: 'en' | 'nl' = rene ? 'nl' : 'en';
+
+  // Changelog is fetched once from the main process (which reads CHANGELOG.md).
+  const [changelog, setChangelog] = useState<ChangelogVersion[]>([]);
+  const [showOlder, setShowOlder] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    window.desktop
+      ?.getChangelog()
+      .then((v) => {
+        if (alive) setChangelog(Array.isArray(v) ? v : []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Rene mode's secret handshake (↑ ↓ ← → a b) only works here: this listener
   // exists only while the settings page is mounted. Keystrokes inside inputs
@@ -332,6 +412,36 @@ export function SettingsPanel({
             >
               {statusText}
             </p>
+          )}
+        </div>
+
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          {S.sectionWhatsNew}
+        </h2>
+        <div className="mb-6 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
+          {changelog.length === 0 ? (
+            <p className="text-sm text-neutral-400">{S.changelogEmpty}</p>
+          ) : (
+            <>
+              <ChangelogVersionBlock version={changelog[0]} uiLang={uiLang} S={S} />
+              {changelog.length > 1 && (
+                <>
+                  {showOlder && (
+                    <div className="mt-4 flex flex-col gap-4 border-t border-black/5 pt-4 dark:border-white/5">
+                      {changelog.slice(1).map((v) => (
+                        <ChangelogVersionBlock key={v.version} version={v} uiLang={uiLang} S={S} />
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setShowOlder((s) => !s)}
+                    className="mt-3 text-xs font-medium text-blue-600 transition hover:text-blue-500 dark:text-blue-400"
+                  >
+                    {showOlder ? S.hideOlder : S.showOlder}
+                  </button>
+                </>
+              )}
+            </>
           )}
         </div>
 

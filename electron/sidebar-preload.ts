@@ -52,4 +52,5 @@ contextBridge.exposeInMainWorld('desktop', {
   setTheme: (theme: 'system' | 'light' | 'dark'): void => ipcRenderer.send(IPC.SET_THEME, theme),
   setNotificationOpen: (v: 'app' | 'window'): void => ipcRenderer.send(IPC.SET_NOTIFICATION_OPEN, v),
   setReneMode: (v: boolean): void => ipcRenderer.send(IPC.SET_RENE_MODE, v),
+  getChangelog: (): Promise<unknown> => ipcRenderer.invoke(IPC.CHANGELOG_GET),
 });

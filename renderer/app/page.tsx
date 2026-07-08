@@ -6,6 +6,7 @@ import { CALENDAR_ICON_DATA_URI } from './calendar-icon-data';
 import { getStrings } from './strings';
 import { APP_SURFACES, SURFACE_CONFIG, type Surface } from '../lib/surfaces';
 import { APP_ICONS, WaffleIcon } from './app-icons';
+import type { ChangelogVersion } from './changelog-types';
 
 export interface Profile {
   index: number;
@@ -76,6 +77,7 @@ interface DesktopBridge {
   setTheme(theme: 'system' | 'light' | 'dark'): void;
   setNotificationOpen(v: 'app' | 'window'): void;
   setReneMode(v: boolean): void;
+  getChangelog(): Promise<ChangelogVersion[]>;
 }
 
 declare global {
