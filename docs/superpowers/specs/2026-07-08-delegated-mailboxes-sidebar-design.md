@@ -59,6 +59,21 @@ delegated mailbox capture and record in this spec:
 The rest of the plan is written against these placeholders; the first
 implementation step fills them in and the URL builders are finalized then.
 
+**Two go/no-go gates** are decided during Task 0 — treat it as a spike with a
+kill switch, not a commitment to the full build:
+
+1. **Can the switcher be read without a trusted click?** If delegated entries
+   only render after a user gesture we can't reliably synthesize into a Gmail
+   view, auto-detection is off the table and the feature ships **manual-add
+   only** (still useful). This does not block the feature — see the detection
+   design, which makes manual-add primary regardless.
+2. **Do unread + notifications fire for a delegated inbox?** Quick spike: does
+   the delegated mail view report unread and raise a notification like an owned
+   account? If not, the feature ships as delegated **viewing**, not delegated
+   **alerting**, and that limitation is documented rather than forced.
+
+Record both answers in this section; they determine the scope actually built.
+
 ## Design
 
 ### 1. Account identity model (the central change)
@@ -89,32 +104,56 @@ This keeps each account self-describing: the view manager no longer knows or
 cares whether an account is an authuser slot or a delegate — it just asks the
 ref for its URL and routes by key.
 
-### 2. Detection (hybrid: auto-detect + manual fallback)
+### 2. Detection (persistence-first; manual primary, auto-scan best-effort)
 
-- **Auto-detect (primary).** After the existing authuser probe finishes, run a
-  new **delegation scan**: in account `/u/0/`'s mail view, read the account
-  switcher and extract every entry Google marks as delegated — email + the href
-  Google points it at. This yields **all** delegated mailboxes at once
-  (the user has several), each becoming a `kind: 'delegated'` profile.
-  Locale-independent DOM matching only.
-- **Manual fallback.** The sidebar "+" menu gains an "Add delegated mailbox"
-  entry (email input) for anything the scan misses; it creates the same profile
-  shape using the Task 0 URL form.
+The design goal is **graceful degradation**: because delegated discovery lives
+in Google's DOM (which we don't control and can't test against), the feature
+must never *silently lose* a working mailbox when Google reshuffles its UI. The
+scrape is treated as a convenience layered on top of durable persistence and
+manual control, not as the thing the feature depends on.
+
+- **Persist last-known-good (durability layer).** A new `delegated-store`
+  persists each known delegated mailbox: `{ email, mailUrl, calendarUrl }`.
+  Because we adopt Google's *real* href, a persisted entry keeps working
+  regardless of the switcher DOM. On launch the sidebar is populated from this
+  store immediately; detection only ever *adds* to it. This converts the top
+  risk from "mailboxes silently vanish" into "you keep everything; only
+  discovery of a brand-new mailbox may need a manual add."
+- **Manual add (primary path).** The sidebar "+" menu gains "Add delegated
+  mailbox" (email input). This path never breaks — it does not depend on reading
+  the switcher — so it is the primary way to add a mailbox and the guaranteed
+  fallback if auto-scan ever stops working. It writes to `delegated-store`.
+- **Auto-scan (best-effort convenience).** After authuser detection, attempt to
+  read the account switcher in `/u/0/` mail and extract delegated entries
+  (email + Google's href), locale-independently. Any found are merged into
+  `delegated-store`. This saves the user from typing when it works, but the
+  feature does not rely on it.
+  - **Layered selectors:** match each entry through a fallback chain (stable
+    `jslog` id → href pattern → structural shape), so a single DOM change does
+    not kill detection.
+  - **Health check — never drop to zero:** a scan that returns *fewer* entries
+    than the store already holds is treated as "scrape probably broke," not as
+    "mailboxes removed." The store is kept intact and a non-fatal
+    "couldn't refresh delegated accounts" hint is surfaced. Only explicit user
+    removal deletes an entry.
 - **Dedup / removal / ordering.** Keyed by `accountKey`, so delegated mailboxes
   coexist with authuser accounts in `removed-store`, `prefs-store` order, and
-  colors with no collisions. A delegated mailbox whose delegate email equals an
+  colors with no collisions. A delegated mailbox whose email equals an
   already-detected authuser account is skipped (it's the same inbox).
-- Detection stays a pure planner where practical: extend/parallel
-  `detection-planner.ts` with a delegation planner that takes the scraped list
-  and returns which entries to register vs skip.
+- Detection stays a pure planner where practical: a delegation planner takes the
+  scraped list plus the store and returns which entries to register vs skip.
 
 ### 3. Calendar "if available"
 
 Mail delegation and calendar sharing are independent. For each delegated
-mailbox, **probe** the delegated calendar URL (from Task 0) in a hidden view; if
-it loads a real calendar (not a permission/error page), set `hasCalendar: true`
-and render the Calendar icon. Otherwise render mail only. The probe result is
-cached on the profile so it isn't repeated every render.
+mailbox, **probe** the delegated calendar URL (from Task 0) in a hidden view.
+Judge reachability by the **navigation/redirect signal**, not page content:
+Google redirects a no-access calendar to a predictable URL, so read the final
+URL after `did-navigate`/`did-redirect-navigation` (and the HTTP response)
+rather than scraping the page DOM. This is far more stable than recognizing an
+error page's markup and is locale-proof for free. On success set the profile's
+`calendarUrl`; otherwise leave it `null` (mail only). The result is persisted in
+`delegated-store` so it isn't re-probed every launch.
 
 ### 4. Sidebar rendering
 
@@ -134,14 +173,31 @@ notifications with no preload change beyond the key rename. Per-account
 
 ## Error handling & edge cases
 
-- **Task 0 URL wrong / Google changes it:** the manual-add fallback and the fact
-  that we adopt Google's own href (not a constructed URL) limit blast radius; a
-  delegated view that fails to load shows Google's own error inside the view.
+- **Switcher DOM changes / Google changes the URL:** contained, not eliminated.
+  Persisted mailboxes keep working (real Google hrefs); the health check keeps
+  the store intact when a scan returns fewer entries; manual-add always works.
+  Worst case degrades to "auto-discovery of new mailboxes stops," never "working
+  mailboxes disappear."
 - **Delegate access revoked:** the view loads Google's "no access" page; the
   user removes the entry via the existing remove flow. (No special-casing in v1.)
 - **Same inbox as an owned account:** deduped by email during detection.
 - **Locale:** all new DOM scraping matches structure/attributes only, never
-  Dutch/English text.
+  Dutch/English text; failure/availability detection uses redirect URLs, not
+  page text.
+
+## Risk register (irreducible vs contained)
+
+This feature scrapes a product Google controls, so it *will* eventually need
+maintenance. The design contains the failure modes so they degrade instead of
+breaking hard:
+
+| Risk | Likelihood | Mitigation | Residual |
+| --- | --- | --- | --- |
+| Switcher DOM changes → auto-scan stops finding mailboxes | High, eventually | Persist last-known-good + manual-add primary + health check + layered selectors | New-mailbox auto-discovery stops; existing mailboxes unaffected |
+| Switcher needs a trusted click we can't synthesize | Unknown until Task 0 | Manual-add is primary; auto-scan is best-effort | Ship manual-only (go/no-go gate 1) |
+| Unread/notifications don't fire for delegated inbox | Medium | Same preload as owned accounts (delegated view is a normal Gmail page) | Ship viewing without alerting (go/no-go gate 2) |
+| Calendar availability misjudged | Low | Redirect-URL signal, not DOM scraping | Rare wrong icon; user ignores |
+| Shared session (account 0) expires | Low | Recovers on re-login | Temporary breakage |
 
 ## Testing
 

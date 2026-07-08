@@ -2,69 +2,67 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Show Gmail delegated mailboxes as first-class sidebar entries (mail + unread + notifications, and a Calendar icon when a delegated calendar is reachable), alongside the user's own authuser accounts.
+**Goal:** Show Gmail delegated mailboxes as first-class sidebar entries (mail + unread + notifications, and a Calendar icon when a delegated calendar is reachable), alongside the user's own authuser accounts — robustly, so a Gmail UI change degrades gracefully instead of losing working mailboxes.
 
-**Architecture:** Generalize the account identity from a bare integer `index` into a stable string `accountKey` plus a discriminated `AccountRef` that knows how to build its own surface URLs. A new delegation scan reads Google's account switcher (in `/u/0/` mail) to discover delegated mailboxes, adopting Google's own URLs. The view layer, IPC, and sidebar route by `accountKey`; persistence is already email-keyed and needs no migration.
+**Architecture:** Generalize account identity from a bare integer `index` into a stable string `accountKey` plus a discriminated `AccountRef` that builds its own surface URLs. Delegated mailboxes live in a durable `delegated-store` (adopting Google's own URLs); a **manual add** path is the primary, always-works way to register them, and a best-effort **auto-scan** of Google's account switcher is a convenience layered on top with a health check that never drops the store to zero. Calendar availability is judged by redirect URL, not page content. Persistence is already email-keyed, so no migration.
 
 **Tech Stack:** TypeScript, Electron (`WebContentsView`, shared `persist:google` session), Next.js renderer, vitest for pure logic, CDP live-test harness for Electron smoke.
 
 ## Global Constraints
 
 - **No OAuth/API** — authentication is the logged-in Google web session inside embedded views only.
-- **Locale-independent DOM scraping** — the user's Gmail is Dutch; match structure/attributes/`jslog`/href only, never UI text.
-- **Adopt Google's URLs verbatim** for delegated surfaces — never construct a guessed delegation URL; use the href Google itself links to.
-- **`surfaces.ts` stays pure data** — no Electron or DOM imports (it is shared by main, preload, renderer).
-- **Delegated scope is mail + calendar only** — no Drive/Docs/Sheets/Slides/Keep/Contacts/Chat for delegated mailboxes.
+- **Locale-independent** — the user's Gmail is Dutch; match structure/attributes/`jslog`/href only, never UI text. Use redirect URLs (not page text) for availability/failure detection.
+- **Adopt Google's URLs verbatim** for delegated surfaces — never construct a guessed delegation URL.
+- **Graceful degradation** — the feature must never silently lose a working delegated mailbox; auto-scan is best-effort, persistence + manual-add are the guarantees.
+- **`surfaces.ts` stays pure data** — no Electron or DOM imports.
+- **Delegated scope is mail + calendar only** — no Drive/Docs/Sheets/Slides/Keep/Contacts/Chat.
 - **Frequent commits** — one per task, Conventional Commits, type-only prefix, no scope, imperative, no `Co-authored-by` trailer (house style).
 
 ---
 
-### Task 1: Capture the delegation contract → `electron/delegation.ts`
+### Task 1: Capture the delegation contract + go/no-go gates → `electron/delegation.ts`
 
-The whole feature pivots on the exact URL and switcher DOM Google uses. This task observes them on the user's real delegated mailbox and encodes the findings as typed functions the rest of the plan consumes. There is no unit test here — the deliverable is verified live via the CDP harness and recorded in the spec.
+The feature pivots on the exact URL, switcher DOM, and redirect signals Google uses, which we observe on the user's real delegated mailbox and encode as typed functions. **This is a spike with a kill switch:** two gates decided here set the scope actually built. No unit test — verified live via the CDP harness and recorded in the spec.
 
 **Files:**
 - Create: `electron/delegation.ts`
-- Modify: `docs/superpowers/specs/2026-07-08-delegated-mailboxes-sidebar-design.md` (fill the Task 0 placeholders with observed values)
+- Modify: `docs/superpowers/specs/2026-07-08-delegated-mailboxes-sidebar-design.md` (fill the Task 0 placeholders + record both gate outcomes)
 
 **Interfaces:**
 - Produces:
   - `interface DelegatedEntry { email: string; mailUrl: string; }`
-  - `parseDelegatedEntries(switcherHtmlOrHandle): DelegatedEntry[]` — pure function operating on a serialisable description of the switcher DOM (array of `{ email, href }` scraped in-page), returning normalised entries. Kept DOM-free so it is unit-testable.
-  - `delegatedMailUrl(entry: DelegatedEntry): string` — returns `entry.mailUrl` (Google's own href), normalised.
-  - `delegatedCalendarUrl(entry: DelegatedEntry): string | null` — the calendar URL to probe, or `null` if the form observed in Task 1 has no calendar variant.
-  - `SWITCHER_SCRAPE_JS: string` — the in-page JS (string) that, run in the `/u/0/` mail view, opens/reads the account switcher and returns `Array<{ email: string; href: string }>` for delegated entries only, matched locale-independently.
+  - `parseDelegatedEntries(raw: Array<{ email: string; href: string }>): DelegatedEntry[]` — pure, DOM-free, unit-testable.
+  - `delegatedMailUrl(entry: DelegatedEntry): string`
+  - `delegatedCalendarUrl(entry: DelegatedEntry): string | null`
+  - `isCalendarNoAccessUrl(finalUrl: string): boolean` — true when a navigated calendar URL redirected to Google's no-access form (the redirect signal).
+  - `SWITCHER_SCRAPE_JS: string` — in-page JS that reads the switcher and returns `Array<{ email, href }>` for delegated entries, matched locale-independently through a layered selector chain.
 
 - [ ] **Step 1: Launch the app under CDP**
-
-Delete any stale lock, then launch headfully with remote debugging (per the CDP live-test harness notes):
 
 ```bash
 rm -f ~/.config/gmail-desktop/SingletonLock
 DISPLAY=:0 ./node_modules/.bin/electron . --remote-debugging-port=9333
 ```
 
-- [ ] **Step 2: Observe the delegated mail URL and switcher DOM**
+- [ ] **Step 2: GATE 1 — can the switcher be read without a trusted click?**
 
-Attach to the `/u/0/` mail page target (`curl http://127.0.0.1:9333/json`), then via `Runtime.evaluate` inspect the account-switcher menu. Record:
-- the href Google uses for each delegated mailbox (the `mailUrl` form),
-- the DOM attribute carrying the delegate email,
-- the structural marker distinguishing a delegated entry from an owned account (attribute / `jslog` / element shape — NOT text).
+Attach to the `/u/0/` mail target (`curl http://127.0.0.1:9333/json`) and try to read the delegated entries via `Runtime.evaluate` **without** a user gesture. Record whether the entries are present in the DOM directly, or only after an interaction we cannot reliably synthesize.
+- **PASS** → auto-scan is viable (Task 8 ships).
+- **FAIL** → auto-scan is dropped; the feature ships manual-add-only (Task 8 becomes a no-op, everything else stands). Write the outcome in the spec.
 
-Write the observed values into the spec's Task 0 section (replace the placeholders).
+- [ ] **Step 3: Observe the mail URL + switcher DOM + calendar redirect**
 
-- [ ] **Step 3: Determine calendar reachability + URL**
+Record in the spec: the delegated mail href form; the attribute carrying the email; the structural marker (attribute/`jslog`/shape, NOT text) distinguishing a delegated entry; the delegated-calendar URL form; and the URL a **no-access** calendar redirects to (navigate a hidden view to one and read the final URL).
 
-Navigate a hidden view to the candidate delegated-calendar URL for one delegated account. Record whether it loads a real calendar vs an error page, and the exact URL form. If no delegated-calendar form exists, `delegatedCalendarUrl` returns `null` and the Calendar icon is simply never shown for delegated mailboxes.
+- [ ] **Step 4: GATE 2 — do unread + notifications fire for a delegated inbox?**
 
-- [ ] **Step 4: Encode findings in `electron/delegation.ts`**
+Load a delegated mail view; confirm it reports unread via the existing preload path and can raise a notification (hook `window.Notification` / `ServiceWorkerRegistration.showNotification` per the CDP notes). Record PASS/FAIL in the spec. FAIL → ship viewing-only (Task 11 documents the limitation instead of asserting it works).
 
-Implement `DelegatedEntry`, `parseDelegatedEntries`, `delegatedMailUrl`, `delegatedCalendarUrl`, and `SWITCHER_SCRAPE_JS` using the observed values. Example shape (fill URL/selectors from observation):
+- [ ] **Step 5: Encode findings in `electron/delegation.ts`**
 
 ```ts
 export interface DelegatedEntry { email: string; mailUrl: string; }
 
-// Pure: takes what SWITCHER_SCRAPE_JS returns, normalises to entries.
 export function parseDelegatedEntries(
   raw: Array<{ email: string; href: string }>,
 ): DelegatedEntry[] {
@@ -78,19 +76,22 @@ export function delegatedMailUrl(entry: DelegatedEntry): string {
 }
 
 export function delegatedCalendarUrl(/* entry */): string | null {
-  // Return the observed calendar URL form, or null if none exists.
-  return null; // finalised in Step 3
+  return null; // finalised from Step 3
 }
 
-// In-page JS, matched locale-independently (structure/attributes only).
-export const SWITCHER_SCRAPE_JS = `/* finalised from Step 2 observation */`;
+export function isCalendarNoAccessUrl(finalUrl: string): boolean {
+  return /* observed no-access redirect pattern from Step 3 */ false;
+}
+
+// Layered selector chain, structure/attributes only (finalised from Step 3).
+export const SWITCHER_SCRAPE_JS = `/* returns Array<{email, href}> */`;
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add electron/delegation.ts docs/superpowers/specs/2026-07-08-delegated-mailboxes-sidebar-design.md
-git commit -m "feat: capture delegated-mailbox URL/switcher contract"
+git commit -m "feat: capture delegated-mailbox contract and gates"
 ```
 
 ---
@@ -98,13 +99,14 @@ git commit -m "feat: capture delegated-mailbox URL/switcher contract"
 ### Task 2: Account identity model (`accountKey` + `AccountRef`)
 
 **Files:**
-- Create: `electron/account-ref.ts`
-- Test: `electron/account-ref.test.ts`
+- Create: `renderer/lib/account-ref.ts` (pure, importable by Next.js + esbuild + vitest)
+- Create: `electron/account-ref.ts` (re-export from the renderer module, for Electron import paths)
+- Test: `renderer/lib/account-ref.test.ts`
 
 **Interfaces:**
 - Produces:
   - `type AccountRef = { kind: 'authuser'; index: number } | { kind: 'delegated'; email: string; mailUrl: string; calendarUrl: string | null }`
-  - `accountKey(ref: AccountRef): string` → `` `u${index}` `` or `` `d:${email}` ``
+  - `accountKey(ref: AccountRef): string` → `` `u${index}` `` / `` `d:${email}` ``
   - `parseAccountKey(key: string): { kind: 'authuser'; index: number } | { kind: 'delegated'; email: string }`
 
 - [ ] **Step 1: Write the failing test**
@@ -124,7 +126,7 @@ describe('accountKey', () => {
   it('round-trips authuser keys', () => {
     expect(parseAccountKey('u2')).toEqual({ kind: 'authuser', index: 2 });
   });
-  it('round-trips delegated keys with colons in email intact', () => {
+  it('round-trips delegated keys with the email intact', () => {
     expect(parseAccountKey('d:team@x.com')).toEqual({ kind: 'delegated', email: 'team@x.com' });
   });
 });
@@ -132,12 +134,13 @@ describe('accountKey', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npx vitest run electron/account-ref.test.ts`
+Run: `npx vitest run renderer/lib/account-ref.test.ts`
 Expected: FAIL — cannot find module `./account-ref`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Implement**
 
 ```ts
+// renderer/lib/account-ref.ts
 export type AccountRef =
   | { kind: 'authuser'; index: number }
   | { kind: 'delegated'; email: string; mailUrl: string; calendarUrl: string | null };
@@ -154,16 +157,21 @@ export function parseAccountKey(
 }
 ```
 
+```ts
+// electron/account-ref.ts
+export * from '../renderer/lib/account-ref';
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npx vitest run electron/account-ref.test.ts`
+Run: `npx vitest run renderer/lib/account-ref.test.ts`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add electron/account-ref.ts electron/account-ref.test.ts
-git commit -m "feat: add account-ref identity model for accounts"
+git add renderer/lib/account-ref.ts electron/account-ref.ts renderer/lib/account-ref.test.ts
+git commit -m "feat: add account-ref identity model"
 ```
 
 ---
@@ -171,14 +179,12 @@ git commit -m "feat: add account-ref identity model for accounts"
 ### Task 3: Generalize `surfaces.ts` URL builders to take `AccountRef`
 
 **Files:**
-- Modify: `renderer/lib/surfaces.ts:21-91` (the `SurfaceConfig.url` signature and each builder)
+- Modify: `renderer/lib/surfaces.ts:21-91`
 - Test: `renderer/lib/surfaces.test.ts`
 
-Note: `surfaces.ts` must stay pure. Import the *type* `AccountRef` from a pure module. Move `AccountRef` into `renderer/lib/surfaces.ts` itself (or a sibling pure file under `renderer/lib/`) so Next.js can compile it; `electron/account-ref.ts` re-exports it to keep Task 2's import path. (Adjust Task 2's file to `renderer/lib/account-ref.ts` with an `electron/account-ref.ts` re-export if cleaner — decide at Task 3 and keep consistent.)
-
 **Interfaces:**
-- Consumes: `AccountRef` from Task 2.
-- Produces: `SurfaceConfig.url(ref: AccountRef): string`; a helper `surfacesForRef(ref: AccountRef): Surface[]` returning `['mail','calendar',...]` for authuser and `['mail']` (+ `'calendar'` when `ref.calendarUrl`) for delegated.
+- Consumes: `AccountRef` (Task 2).
+- Produces: `SurfaceConfig.url(ref: AccountRef): string`; `surfacesForRef(ref: AccountRef): Surface[]` — all surfaces for authuser; `['mail']` (+ `'calendar'` when `ref.calendarUrl`) for delegated.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -213,7 +219,7 @@ Expected: FAIL — `url` still expects a number / `surfacesForRef` undefined.
 
 - [ ] **Step 3: Implement**
 
-Change `SurfaceConfig.url` to `url(ref: AccountRef): string`. Each authuser builder reads `ref.kind === 'authuser' ? ref.index : 0`-guarded; delegated `mail` returns `ref.mailUrl`, delegated `calendar` returns `ref.calendarUrl!`. Add:
+Change `SurfaceConfig.url` to `url(ref: AccountRef): string`. Add a private helper `authIndex(ref)` (`ref.kind === 'authuser' ? ref.index : 0`); authuser builders keep `/u/${authIndex(ref)}/`. Delegated `mail` returns `ref.mailUrl`; delegated `calendar` returns `ref.calendarUrl!`. Non-mail/calendar builders throw if called with a delegated ref (they are guarded by `surfacesForRef` and must never emit a wrong URL). Add:
 
 ```ts
 export function surfacesForRef(ref: AccountRef): Surface[] {
@@ -221,8 +227,6 @@ export function surfacesForRef(ref: AccountRef): Surface[] {
   return ref.calendarUrl ? ['mail', 'calendar'] : ['mail'];
 }
 ```
-
-For authuser, keep existing `/u/${index}/` forms (extract `const i = ref.kind === 'authuser' ? ref.index : 0;` at the top of each builder, or a shared `authIndex(ref)` helper). Delegated builders for non-mail/calendar surfaces are never called (guarded by `surfacesForRef`), but should throw a clear error if reached rather than emit a wrong URL.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -232,7 +236,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add renderer/lib/surfaces.ts renderer/lib/surfaces.test.ts renderer/lib/account-ref.ts electron/account-ref.ts
+git add renderer/lib/surfaces.ts renderer/lib/surfaces.test.ts
 git commit -m "feat: build surface urls from account-ref"
 ```
 
@@ -245,8 +249,8 @@ git commit -m "feat: build surface urls from account-ref"
 - Test: `electron/delegation-planner.test.ts`
 
 **Interfaces:**
-- Consumes: `DelegatedEntry` (Task 1), the list of already-known authuser emails, and the removed-list keys.
-- Produces: `planDelegated(entries: DelegatedEntry[], knownAuthuserEmails: string[], removedKeys: string[]): DelegatedEntry[]` — entries to register, lowercased-deduped, excluding any whose email matches an authuser account or whose `d:email` key is in the removed list.
+- Consumes: `DelegatedEntry` (Task 1).
+- Produces: `planDelegated(entries: DelegatedEntry[], knownAuthuserEmails: string[], removedKeys: string[]): DelegatedEntry[]` — lowercased, deduped, excluding any whose email matches an authuser account or whose `d:email` key is removed.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -287,7 +291,7 @@ export function planDelegated(
   knownAuthuserEmails: string[],
   removedKeys: string[],
 ): DelegatedEntry[] {
-  const owned = new Set(knownAuthuserEmails.map((e) => e.toLowerCase()));
+  const owned = new Set(knownAuthuserEmails.map((x) => x.toLowerCase()));
   const removed = new Set(removedKeys);
   const seen = new Set<string>();
   const out: DelegatedEntry[] = [];
@@ -317,23 +321,23 @@ git commit -m "feat: add delegation planner"
 
 ### Task 5: Route the view layer by `accountKey` instead of integer index
 
-Mechanical but broad. No new unit test (the view manager is Electron-bound); correctness is enforced by the type checker and the existing suite. Verified at Task 6's live smoke.
+Mechanical but broad. No new unit test (Electron-bound); correctness enforced by the type checker + existing suite, verified live in Task 8/11.
 
 **Files:**
-- Modify: `electron/profile-view-manager.ts` (key fn + all callback signatures + `Profile`)
-- Modify: `electron/main.ts` (every call site of the renamed callbacks)
+- Modify: `electron/profile-view-manager.ts` (key fn, callback signatures, `Profile`)
+- Modify: `electron/main.ts` (every renamed call site)
 
 **Interfaces:**
 - Consumes: `accountKey` (Task 2), `AccountRef` (Task 3).
-- Produces: `ProfileViewManager` methods keyed by `accountKey: string`; `Profile` gains `ref: AccountRef` and `kind`. `ensureView(ref, surface, visible, urlOverride?)` builds its URL via `SURFACE_CONFIG[surface].url(ref)`.
+- Produces: `ProfileViewManager` keyed by `accountKey: string`; `Profile` gains `ref: AccountRef` + `kind`; `ensureView(ref, surface, visible, urlOverride?)` builds its URL via `SURFACE_CONFIG[surface].url(ref)`; `activeIndex()` → `activeKey(): string | null`.
 
-- [ ] **Step 1: Change the `Profile` type and key function**
+- [ ] **Step 1: Change `Profile` and the key function**
 
-In `profile-view-manager.ts`: add `ref: AccountRef` and keep `email/name/avatarUrl/color/order?/label?`; replace `index: number` internal keying with `accountKey`. Change `const key = (index, surface)` to `const key = (accountKey: string, surface: Surface)`. Change every callback type from `(index: number, …)` to `(accountKey: string, …)`. Change `ensureView`/`show`/`isShowing`/`discardView`/`setZoomForIndex`/`openMailThread`/`popOutThread`/`pushNotifyAllowed`/`markNotificationClickHandled` to accept `ref`/`accountKey` as appropriate; `activeIndex()` becomes `activeKey(): string | null`. `loadURL` uses `SURFACE_CONFIG[surface].url(ref)`.
+Add `ref: AccountRef` to `Profile` (keep `email/name/avatarUrl/color/order?/label?`). Replace `const key = (index, surface)` with `key(accountKey: string, surface: Surface)`. Change every callback type from `(index: number, …)` to `(accountKey: string, …)`. `loadURL` uses `SURFACE_CONFIG[surface].url(ref)`.
 
 - [ ] **Step 2: Update every call site in `main.ts`**
 
-Replace the integer `index` threaded through `onUnread`/`onActivate`/`onIdentity`/`onInput`/`getZoom` and detection with `accountKey` + `ref`. Where code previously did arithmetic on `index` (probing next authuser), that logic stays in the authuser detection path only (Task 6) — the callbacks no longer carry a raw index.
+Replace the integer `index` threaded through `onUnread`/`onActivate`/`onIdentity`/`onInput`/`getZoom` with `accountKey` + `ref`. Authuser index arithmetic (probing the next `/u/N/`) stays only in the authuser detection path; callbacks no longer carry a raw index.
 
 - [ ] **Step 3: Type-check and run the full suite**
 
@@ -349,57 +353,188 @@ git commit -m "refactor: route views and ipc by account key"
 
 ---
 
-### Task 6: Wire the delegation scan into the detection driver
+### Task 6: `delegated-store` — durable last-known-good persistence
+
+The durability layer: delegated mailboxes survive Gmail UI changes because they persist with Google's real URLs.
 
 **Files:**
-- Modify: `electron/main.ts` (after authuser detection completes, run the scan)
-- Uses: `SWITCHER_SCRAPE_JS`, `parseDelegatedEntries`, `delegatedMailUrl`, `delegatedCalendarUrl` (Task 1); `planDelegated` (Task 4); `AccountRef` (Task 2).
+- Create: `electron/delegated-store.ts`
+- Test: `electron/delegated-store.test.ts`
 
-- [ ] **Step 1: Add the scan step**
+**Interfaces:**
+- Produces:
+  - `interface StoredDelegate { email: string; mailUrl: string; calendarUrl: string | null }`
+  - `class DelegatedStore { constructor(filePath: string); list(): StoredDelegate[]; upsert(d: StoredDelegate): void; remove(email: string): void; }`
+  - `mergeScan(existing: StoredDelegate[], scanned: StoredDelegate[]): { next: StoredDelegate[]; healthOk: boolean }` — pure merge with the **health check**: never removes existing entries; `healthOk === false` when `scanned.length < existing.length` (probable scrape breakage), and the scanned set is *not* used to prune.
 
-When authuser detection finishes, in the `/u/0/` mail view run `webContents.executeJavaScript(SWITCHER_SCRAPE_JS)`, pass the result through `parseDelegatedEntries`, then `planDelegated(entries, knownAuthuserEmails, removedStore.keys())`. For each surviving entry build `ref: { kind: 'delegated', email, mailUrl: delegatedMailUrl(entry), calendarUrl: null }` (calendar filled in Task 7) and register a `Profile` (color via `color-store`, order/label via `prefs-store` — already email-keyed).
+- [ ] **Step 1: Write the failing test**
 
-- [ ] **Step 2: Emit `PROFILES_CHANGED`**
+```ts
+import { describe, it, expect } from 'vitest';
+import { mergeScan } from './delegated-store';
 
-Merge delegated profiles into the profile list already pushed to the renderer over IPC, sorted by the existing order logic (email-keyed).
+const d = (email: string, cal: string | null = null) => ({ email, mailUrl: `https://m/${email}`, calendarUrl: cal });
 
-- [ ] **Step 3: Live smoke via CDP**
+describe('mergeScan', () => {
+  it('adds newly scanned delegates', () => {
+    const { next } = mergeScan([d('a@x.com')], [d('a@x.com'), d('b@x.com')]);
+    expect(next.map((x) => x.email).sort()).toEqual(['a@x.com', 'b@x.com']);
+  });
+  it('never drops an existing delegate the scan missed', () => {
+    const { next } = mergeScan([d('a@x.com'), d('b@x.com')], [d('a@x.com')]);
+    expect(next.map((x) => x.email).sort()).toEqual(['a@x.com', 'b@x.com']);
+  });
+  it('flags healthOk=false when the scan returns fewer than we hold', () => {
+    const { healthOk } = mergeScan([d('a@x.com'), d('b@x.com')], [d('a@x.com')]);
+    expect(healthOk).toBe(false);
+  });
+  it('updates calendarUrl from a fresh scan for an existing delegate', () => {
+    const { next } = mergeScan([d('a@x.com', null)], [d('a@x.com', 'https://c/')]);
+    expect(next.find((x) => x.email === 'a@x.com')?.calendarUrl).toBe('https://c/');
+  });
+});
+```
 
-Relaunch under `--remote-debugging-port=9333`. Confirm each real delegated mailbox appears in the profile list (inspect the sidebar `app://bundle/` target state) and its mail view loads Google's delegated inbox (not an error page).
+- [ ] **Step 2: Run test to verify it fails**
 
-- [ ] **Step 4: Commit**
+Run: `npx vitest run electron/delegated-store.test.ts`
+Expected: FAIL — module not found.
+
+- [ ] **Step 3: Implement**
+
+```ts
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+export interface StoredDelegate { email: string; mailUrl: string; calendarUrl: string | null }
+
+export function mergeScan(
+  existing: StoredDelegate[],
+  scanned: StoredDelegate[],
+): { next: StoredDelegate[]; healthOk: boolean } {
+  const byEmail = new Map(existing.map((d) => [d.email.toLowerCase(), d]));
+  for (const s of scanned) byEmail.set(s.email.toLowerCase(), { ...byEmail.get(s.email.toLowerCase()), ...s });
+  return { next: [...byEmail.values()], healthOk: scanned.length >= existing.length };
+}
+
+export class DelegatedStore {
+  constructor(private readonly filePath: string) {}
+  list(): StoredDelegate[] {
+    if (!existsSync(this.filePath)) return [];
+    try {
+      const raw = JSON.parse(readFileSync(this.filePath, 'utf8'));
+      return Array.isArray(raw) ? raw : [];
+    } catch {
+      return [];
+    }
+  }
+  private write(items: StoredDelegate[]): void {
+    mkdirSync(dirname(this.filePath), { recursive: true });
+    writeFileSync(this.filePath, JSON.stringify(items, null, 2), 'utf8');
+  }
+  upsert(d: StoredDelegate): void {
+    const items = this.list().filter((x) => x.email.toLowerCase() !== d.email.toLowerCase());
+    items.push(d);
+    this.write(items);
+  }
+  remove(email: string): void {
+    this.write(this.list().filter((x) => x.email.toLowerCase() !== email.toLowerCase()));
+  }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run electron/delegated-store.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add electron/main.ts
-git commit -m "feat: detect delegated mailboxes from account switcher"
+git add electron/delegated-store.ts electron/delegated-store.test.ts
+git commit -m "feat: add durable delegated-mailbox store"
 ```
 
 ---
 
-### Task 7: Calendar-availability probe for delegated mailboxes
+### Task 7: Manual "Add delegated mailbox" — the primary path
+
+Always works; does not depend on reading the switcher. Populate the sidebar from `delegated-store` on launch.
 
 **Files:**
-- Modify: `electron/main.ts` (probe after registering a delegated profile)
-- Uses: `delegatedCalendarUrl` (Task 1).
+- Modify: `renderer/app/page.tsx` (the "+" menu), `electron/sidebar-preload.ts` (bridge), `electron/main.ts` (handler + launch-time load), `electron/ipc.ts` (channel)
+- Uses: `DelegatedStore` (Task 6), `delegatedMailUrl`/`delegatedCalendarUrl`/`isCalendarNoAccessUrl` (Task 1), `AccountRef` (Task 2).
 
-- [ ] **Step 1: Probe**
+- [ ] **Step 1: Load persisted delegates on launch**
 
-If `delegatedCalendarUrl(entry)` is non-null, load it in a hidden view and check whether it resolves to a real calendar vs a permission/error page (detect via a locale-independent signal observed in Task 1 — e.g. presence of the calendar grid root element, absence of the error container). Set `ref.calendarUrl` accordingly and cache the result on the profile so it is not re-probed each render.
+In `main.ts`, on startup read `DelegatedStore.list()`, build a `kind: 'delegated'` `Profile` per entry (color via `color-store`, order/label via `prefs-store`, all email-keyed), and include them in the `PROFILES_CHANGED` payload alongside authuser profiles.
 
-- [ ] **Step 2: Live smoke**
+- [ ] **Step 2: Add the manual entry point**
 
-Confirm a delegated mailbox with a shared calendar shows `calendarUrl` set, and one without shows `null`.
+Extend the "+" control with "Add delegated mailbox" → email prompt → new IPC channel → main-side handler that builds the mail URL (Task 1), runs the calendar probe (Task 9), `upsert`s into `DelegatedStore`, and re-emits `PROFILES_CHANGED`. Skip if the email is already a known account.
+
+- [ ] **Step 3: Live smoke via CDP**
+
+Relaunch under `--remote-debugging-port=9333`. Add a delegated mailbox manually; confirm it appears, persists across a restart, and its mail view loads Google's delegated inbox.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add renderer/app/page.tsx electron/sidebar-preload.ts electron/main.ts electron/ipc.ts
+git commit -m "feat: add delegated mailboxes via manual entry"
+```
+
+---
+
+### Task 8: Auto-scan the account switcher (best-effort convenience)
+
+Only ships if **Gate 1 (Task 1) passed**. Layered selectors + health check; merges into the store, never prunes it.
+
+**Files:**
+- Modify: `electron/main.ts`
+- Uses: `SWITCHER_SCRAPE_JS`, `parseDelegatedEntries` (Task 1); `planDelegated` (Task 4); `mergeScan` + `DelegatedStore` (Task 6).
+
+- [ ] **Step 1: Run the scan after authuser detection**
+
+In the `/u/0/` mail view, `executeJavaScript(SWITCHER_SCRAPE_JS)`, pass through `parseDelegatedEntries`, then `planDelegated(entries, knownAuthuserEmails, removedStore.keys())`. Convert survivors to `StoredDelegate` (calendar via Task 9), then `const { next, healthOk } = mergeScan(store.list(), scanned)`; write `next` back and, when `healthOk === false`, surface a non-fatal "couldn't refresh delegated accounts" hint (do **not** prune). Re-emit `PROFILES_CHANGED`.
+
+- [ ] **Step 2: Live smoke via CDP**
+
+Confirm each real delegated mailbox is auto-detected and merged; then simulate a broken scrape (temporarily point `SWITCHER_SCRAPE_JS` at a selector that returns fewer/none) and confirm the existing mailboxes remain and the hint appears.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add electron/main.ts
-git commit -m "feat: probe delegated calendar availability"
+git commit -m "feat: auto-detect delegated mailboxes with health check"
 ```
 
 ---
 
-### Task 8: Render delegated profiles in the sidebar
+### Task 9: Calendar-availability probe via redirect signal
+
+**Files:**
+- Modify: `electron/main.ts`
+- Uses: `delegatedCalendarUrl` + `isCalendarNoAccessUrl` (Task 1).
+
+- [ ] **Step 1: Probe by final URL, not page content**
+
+If `delegatedCalendarUrl(entry)` is non-null, load it in a hidden view and read the final URL from `did-navigate` / `did-redirect-navigation`. If `isCalendarNoAccessUrl(finalUrl)` is true, set `calendarUrl = null`; otherwise keep the calendar URL. Persist the result in `DelegatedStore` so it isn't re-probed each launch.
+
+- [ ] **Step 2: Live smoke**
+
+Confirm a delegated mailbox with a shared calendar keeps `calendarUrl`, and one without redirects to no-access and resolves to `null`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add electron/main.ts
+git commit -m "feat: probe delegated calendar via redirect signal"
+```
+
+---
+
+### Task 10: Render delegated profiles in the sidebar
 
 **Files:**
 - Modify: `renderer/app/page.tsx` (the `Sidebar` profile map, ~`:229-324`)
@@ -407,11 +542,11 @@ git commit -m "feat: probe delegated calendar availability"
 
 - [ ] **Step 1: Conditional surfaces + marker**
 
-For each profile, render mail avatar + unread badge as today. Render the Calendar icon only when `surfacesForRef(profile.ref)` includes `'calendar'`. Render the waffle flyout only for `profile.kind === 'authuser'`. Add a small visual marker (e.g. a corner badge/overlay on the avatar) when `profile.kind === 'delegated'` so owned vs delegated is distinguishable. Drag-reorder and label/color keep working via `accountKey`.
+Render mail avatar + unread badge as today. Render the Calendar icon only when `surfacesForRef(profile.ref)` includes `'calendar'`. Render the waffle flyout only for `profile.kind === 'authuser'`. Add a small visual marker (corner badge/overlay) when `profile.kind === 'delegated'`. Drag-reorder and label/color keep working via `accountKey`.
 
 - [ ] **Step 2: Live smoke**
 
-Relaunch under CDP; `Page.captureScreenshot` the sidebar target and confirm delegated avatars show the marker, show Calendar only when available, and show no waffle.
+Relaunch under CDP; `Page.captureScreenshot` the sidebar target; confirm delegated avatars show the marker, show Calendar only when available, and show no waffle.
 
 - [ ] **Step 3: Commit**
 
@@ -422,38 +557,17 @@ git commit -m "feat: render delegated mailboxes in sidebar"
 
 ---
 
-### Task 9: Manual "Add delegated mailbox" fallback
+### Task 11: Verify unread + notifications route to delegated mailboxes
 
-**Files:**
-- Modify: `renderer/app/page.tsx` (the "+" menu), `electron/sidebar-preload.ts` (bridge method), `electron/main.ts` (handler), `electron/ipc.ts` (channel)
-
-- [ ] **Step 1: Add the entry point**
-
-Extend the "+" control with an "Add delegated mailbox" action that prompts for an email, sends it over a new IPC channel, and on the main side constructs a delegated `Profile` using the Task 1 URL form + the calendar probe (Task 7), then re-emits `PROFILES_CHANGED`. Skip if the email is already a known account.
-
-- [ ] **Step 2: Live smoke**
-
-Add a delegated mailbox manually and confirm it appears and loads.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add renderer/app/page.tsx electron/sidebar-preload.ts electron/main.ts electron/ipc.ts
-git commit -m "feat: add manual delegated-mailbox entry"
-```
-
----
-
-### Task 10: Verify unread + notifications route to delegated mailboxes
-
-Unread and notifications already flow per view and now route by `accountKey`, so this task is verification + any small fix, not new plumbing.
+Depends on **Gate 2 (Task 1)**. If Gate 2 passed, this is verification; if it failed, document the viewing-only limitation instead of asserting alerting works.
 
 **Files:**
 - Modify (only if a gap is found): `electron/main.ts`, `electron/preload.ts`
+- Modify: `docs/superpowers/specs/2026-07-08-delegated-mailboxes-sidebar-design.md` (record final unread/notification behavior)
 
 - [ ] **Step 1: Live smoke via CDP**
 
-For a delegated mailbox: confirm the unread badge updates, and trigger a test message (send to the delegated address from another view) to confirm a notification fires and, on click, focuses the delegated mail view (routed by `accountKey`). Hook `window.Notification` / `ServiceWorkerRegistration.showNotification` to observe firing, per the CDP notes.
+For a delegated mailbox: confirm the unread badge updates; trigger a test message to the delegated address from another view and confirm a notification fires and, on click, focuses the delegated mail view (routed by `accountKey`). Hook `window.Notification` / `ServiceWorkerRegistration.showNotification` to observe firing.
 
 - [ ] **Step 2: Fix any routing gap, then re-run the full suite**
 
@@ -471,8 +585,10 @@ git commit -m "fix: route delegated-mailbox notifications by account key"
 
 ## Self-Review
 
-**Spec coverage:** account model → Tasks 2/5; `surfaces.ts` generalization → Task 3; hybrid detection → Tasks 6 (auto) + 9 (manual); dedup/removal/ordering → Task 4 + email-keyed stores; calendar-if-available → Task 7; sidebar rendering + marker → Task 8; unread/notifications → Task 10; Task 0 URL/DOM capture → Task 1. All spec sections map to a task.
+**Spec coverage:** account model → Tasks 2/5; `surfaces.ts` generalization → Task 3; persistence/last-known-good + health check → Task 6; manual-add (primary) → Task 7; auto-scan (best-effort, layered selectors, health check) → Task 8; dedup/removal/ordering → Task 4 + email-keyed stores; calendar-if-available via redirect signal → Task 9; sidebar rendering + marker → Task 10; unread/notifications → Task 11; URL/DOM/redirect capture + go/no-go gates → Task 1. All spec sections map to a task.
 
-**Placeholder scan:** The only deferred values are the observed URL/DOM in Task 1, which is *the task whose deliverable is to observe them* — not a plan gap. Downstream tasks consume Task 1's typed functions, not literals.
+**Placeholder scan:** The only deferred values are the observed URL/DOM/redirect patterns in Task 1 — the task whose deliverable is to observe them — consumed downstream via typed functions, not literals. No stray TODOs.
 
-**Type consistency:** `AccountRef`, `accountKey`, `DelegatedEntry`, `parseDelegatedEntries`, `delegatedMailUrl`, `delegatedCalendarUrl`, `planDelegated`, `surfacesForRef` are named identically across the tasks that define and consume them. `Profile` gains `ref` + `kind` in Task 5 and is read with those names in Tasks 6–10.
+**Type consistency:** `AccountRef`, `accountKey`, `parseAccountKey`, `DelegatedEntry`, `parseDelegatedEntries`, `delegatedMailUrl`, `delegatedCalendarUrl`, `isCalendarNoAccessUrl`, `planDelegated`, `surfacesForRef`, `StoredDelegate`, `DelegatedStore`, `mergeScan` are named identically across defining and consuming tasks. `Profile` gains `ref` + `kind` in Task 5 and is read with those names in Tasks 7–11.
+
+**Gate dependencies:** Task 8 is conditional on Gate 1 (Task 1 Step 2); Task 11's assertion level is conditional on Gate 2 (Task 1 Step 4). Both gates are recorded in the spec so a fresh implementer knows the scope actually in force.
