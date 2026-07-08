@@ -34,6 +34,9 @@ to [Semantic Versioning](https://semver.org/).
   sending. Dead views are now cleaned up.
 - Fixed a crash on quit ("Object has been destroyed") when views were torn down
   after the main window had already closed.
+- Fixed a crash ("Object has been destroyed") when clicking a notification after
+  the main window had been closed/torn down — the click now rebuilds the window
+  and brings the app back instead of failing silently.
 - Clicking a notification no longer triggers Gmail's "pop-up blocked" warning
   (the app opens the message itself and hands Gmail's follow-up popup a
   harmless stub instead of a blocked-looking null window).

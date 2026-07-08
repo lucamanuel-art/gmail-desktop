@@ -49,6 +49,7 @@ export class ProfileViewManager {
   }
 
   ensureView(index: number, surface: Surface, visible: boolean, urlOverride?: string): void {
+    if (this.win.isDestroyed()) return;
     const k = key(index, surface);
     if (this.views.has(k)) {
       if (visible) this.show(index, surface);
@@ -110,6 +111,7 @@ export class ProfileViewManager {
   }
 
   show(index: number, surface: Surface): void {
+    if (this.win.isDestroyed()) return;
     this.ensureView(index, surface, false);
     const k = key(index, surface);
     const view = this.views.get(k);
@@ -159,6 +161,9 @@ export class ProfileViewManager {
   }
 
   private applyBounds(view: WebContentsView): void {
+    // The window can be torn down while a hidden view is still around; touching
+    // its contentView/getContentSize then throws "Object has been destroyed".
+    if (this.win.isDestroyed()) return;
     const [width, height] = this.win.getContentSize();
     view.setBounds(contentBounds({ width, height }));
   }

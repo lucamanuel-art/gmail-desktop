@@ -303,6 +303,16 @@ function createWindow(): void {
       applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
     (index, surface, threadId) => {
+      // The main window may have been torn down (some setups actually destroy it
+      // on close rather than hiding to the tray) while hidden views still fire
+      // events. Rebuild it so a notification click brings the app back instead of
+      // crashing on a destroyed window. Skip while quitting (don't resurrect).
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        if (isQuitting) return;
+        detectionStarted = false;
+        createWindow();
+        return;
+      }
       // The app opens the clicked thread itself; Gmail's own click handler may
       // fire window.open with the same thread right after — suppress that
       // (genuine pop-out windows are exempted in windowOpenAction).
