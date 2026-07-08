@@ -46,6 +46,25 @@ describe('PrefsStore', () => {
     expect(new PrefsStore(file).getAll()).toEqual(DEFAULT_PREFS);
   });
 
+  it('defaults reneMode to false and round-trips it', () => {
+    const store = new PrefsStore(file);
+    expect(store.getAll().reneMode).toBe(false);
+    store.setReneMode(true);
+    expect(new PrefsStore(file).getAll().reneMode).toBe(true);
+    store.setReneMode(false);
+    expect(new PrefsStore(file).getAll().reneMode).toBe(false);
+  });
+
+  it('ignores a non-boolean stored reneMode', () => {
+    const store = new PrefsStore(file);
+    store.setTheme('dark'); // create the file
+    const fs = require('node:fs');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    raw.reneMode = 'yes';
+    fs.writeFileSync(file, JSON.stringify(raw), 'utf8');
+    expect(new PrefsStore(file).getAll().reneMode).toBe(false);
+  });
+
   it('deep-merges stored notifications over defaults', () => {
     const store = new PrefsStore(file);
     store.setNotifications({ dnd: true, quietHours: { enabled: true, start: '22:00', end: '07:00' } });

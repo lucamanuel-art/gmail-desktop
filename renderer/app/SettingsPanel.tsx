@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Prefs } from './page';
-import { isCompleteTime } from './settings-utils';
+import { advanceReneSequence, isCompleteTime, RENE_SEQUENCE } from './settings-utils';
+import { getStrings, type UiStrings } from './strings';
 
 interface Profile {
   index: number;
@@ -35,22 +36,22 @@ function initial(p: Profile): string {
   return (p.name || p.email || '?').trim().charAt(0).toUpperCase() || '?';
 }
 
-function updateStatusText(u: UpdateStatus): string {
+function updateStatusText(u: UpdateStatus, S: UiStrings): string {
   switch (u.state) {
     case 'checking':
-      return 'Checking for updates…';
+      return S.updChecking;
     case 'available':
-      return `Update available: v${u.version}`;
+      return S.updAvailable(u.version ?? '');
     case 'not-available':
-      return "You're on the latest version.";
+      return S.updLatest;
     case 'downloading':
-      return `Downloading update… ${u.percent ?? 0}%`;
+      return S.updDownloading(u.percent ?? 0);
     case 'downloaded':
-      return 'Update downloaded — restarting to install…';
+      return S.updDownloaded;
     case 'error':
-      return `Couldn't check for updates: ${u.message ?? 'unknown error'}`;
+      return S.updError(u.message ?? 'unknown error');
     case 'dev':
-      return 'Updates are only available in the installed app.';
+      return S.updDev;
     default:
       return '';
   }
@@ -101,6 +102,29 @@ export function SettingsPanel({
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
 
+  const rene = prefs?.reneMode === true;
+  const S = getStrings(rene);
+
+  // Rene mode's secret handshake (↑ ↓ ← → a b) only works here: this listener
+  // exists only while the settings page is mounted. Keystrokes inside inputs
+  // don't count — arrows/letters there are just editing.
+  const seqProgress = useRef(0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const next = advanceReneSequence(seqProgress.current, e.key);
+      if (next === RENE_SEQUENCE.length) {
+        seqProgress.current = 0;
+        window.desktop?.setReneMode(!rene);
+      } else {
+        seqProgress.current = next;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [rene]);
+
   // "Saved ✓" feedback: flash whenever the main process echoes updated prefs
   // (the write already happened by then), and when Save is pressed.
   const [savedFlash, setSavedFlash] = useState(false);
@@ -132,13 +156,13 @@ export function SettingsPanel({
   };
 
   const busy = update.state === 'checking' || update.state === 'downloading';
-  const statusText = updateStatusText(update);
+  const statusText = updateStatusText(update, S);
 
   return (
     <div className="flex h-screen flex-1 flex-col overflow-y-auto bg-neutral-100 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
       <div className="mx-auto w-full max-w-2xl px-8 py-8">
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{S.settingsTitle}</h1>
           <div className="flex items-center gap-2">
             <span
               aria-live="polite"
@@ -146,29 +170,35 @@ export function SettingsPanel({
                 savedFlash ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              Saved ✓
+              {S.saved}
             </span>
             <button
               onClick={saveNow}
               className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
             >
-              Save
+              {S.save}
             </button>
             <button
               onClick={onClose}
               className="rounded-lg bg-neutral-200 px-3.5 py-1.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
             >
-              Close
+              {S.close}
             </button>
           </div>
         </div>
 
+        {rene && (
+          <div className="mb-6 rounded-xl border border-yellow-300 bg-yellow-100 p-4 text-sm font-medium text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-200">
+            {S.reneBanner}
+          </div>
+        )}
+
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          General
+          {S.sectionGeneral}
         </h2>
         <div className="mb-6 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
           <label className="flex items-center justify-between gap-3">
-            <span className="text-sm">Start Gmail Desktop when I sign in</span>
+            <span className="text-sm">{S.autoStart}</span>
             <input
               type="checkbox"
               checked={!!prefs?.autoStart}
@@ -177,36 +207,36 @@ export function SettingsPanel({
             />
           </label>
           <div className="mt-3 flex items-center justify-between gap-3">
-            <span className="text-sm">Theme</span>
+            <span className="text-sm">{S.theme}</span>
             <select
               value={prefs?.theme ?? 'system'}
               onChange={(e) => window.desktop?.setTheme(e.target.value as 'system' | 'light' | 'dark')}
               className="rounded bg-neutral-200 px-2 py-1 text-sm text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
             >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{S.themeSystem}</option>
+              <option value="light">{S.themeLight}</option>
+              <option value="dark">{S.themeDark}</option>
             </select>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
-            <span className="text-sm">When you click a notification</span>
+            <span className="text-sm">{S.notificationOpenLabel}</span>
             <select
               value={prefs?.notificationOpen ?? 'app'}
               onChange={(e) => window.desktop?.setNotificationOpen(e.target.value as 'app' | 'window')}
               className="rounded bg-neutral-200 px-2 py-1 text-sm text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
             >
-              <option value="app">Open in the app</option>
-              <option value="window">Open in a new window</option>
+              <option value="app">{S.openInApp}</option>
+              <option value="window">{S.openInWindow}</option>
             </select>
           </div>
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          Notifications
+          {S.sectionNotifications}
         </h2>
         <div className="mb-6 flex flex-col gap-3 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
           <label className="flex items-center justify-between gap-3">
-            <span className="text-sm">Do not disturb (mute all)</span>
+            <span className="text-sm">{S.dnd}</span>
             <input
               type="checkbox"
               checked={!!prefs?.notifications.dnd}
@@ -218,7 +248,7 @@ export function SettingsPanel({
             />
           </label>
           <label className="flex items-center justify-between gap-3">
-            <span className="text-sm">Quiet hours</span>
+            <span className="text-sm">{S.quietHours}</span>
             <input
               type="checkbox"
               checked={!!prefs?.notifications.quietHours.enabled}
@@ -234,7 +264,7 @@ export function SettingsPanel({
           </label>
           {prefs?.notifications.quietHours.enabled && (
             <div className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-              <span>From</span>
+              <span>{S.from}</span>
               <input
                 type="time"
                 defaultValue={prefs.notifications.quietHours.start}
@@ -245,7 +275,7 @@ export function SettingsPanel({
                 }}
                 className="rounded bg-neutral-200 px-2 py-1 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
               />
-              <span>to</span>
+              <span>{S.to}</span>
               <input
                 type="time"
                 defaultValue={prefs.notifications.quietHours.end}
@@ -260,13 +290,13 @@ export function SettingsPanel({
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          About &amp; updates
+          {S.sectionAbout}
         </h2>
         <div className="mb-6 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">Gmail Desktop</div>
-              <div className="text-xs text-neutral-400">Version {update.currentVersion ?? '—'}</div>
+              <div className="text-xs text-neutral-400">{S.versionPrefix} {update.currentVersion ?? '—'}</div>
             </div>
             <div className="flex shrink-0 gap-2">
               {update.state === 'available' && (
@@ -274,7 +304,7 @@ export function SettingsPanel({
                   onClick={onDownloadUpdate}
                   className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
                 >
-                  Update now
+                  {S.updateNow}
                 </button>
               )}
               {update.state === 'downloaded' && (
@@ -282,7 +312,7 @@ export function SettingsPanel({
                   onClick={onInstallUpdate}
                   className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
                 >
-                  Restart &amp; install
+                  {S.restartInstall}
                 </button>
               )}
               <button
@@ -290,7 +320,7 @@ export function SettingsPanel({
                 disabled={busy}
                 className="rounded-lg bg-neutral-200 px-3.5 py-1.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
               >
-                {update.state === 'checking' ? 'Checking…' : 'Check for updates'}
+                {update.state === 'checking' ? S.checking : S.checkForUpdates}
               </button>
             </div>
           </div>
@@ -306,7 +336,7 @@ export function SettingsPanel({
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-          Accounts
+          {S.sectionAccounts}
         </h2>
         <div className="mb-6 flex flex-col gap-2.5">
           {profiles.map((p) => {
@@ -364,29 +394,29 @@ export function SettingsPanel({
                       />
                     ))}
                     <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title="Mail notifications for this account">
+                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title={S.mailToggleTitle}>
                         <input
                           type="checkbox"
                           checked={prefs?.accounts?.[p.email]?.notify !== false}
                           onChange={(e) => window.desktop?.setAccountPref({ email: p.email, notify: e.target.checked })}
                           className="h-3.5 w-3.5 accent-blue-600"
                         />
-                        Mail
+                        {S.mailToggle}
                       </label>
-                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title="Calendar reminders for this account">
+                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title={S.calendarToggleTitle}>
                         <input
                           type="checkbox"
                           checked={prefs?.accounts?.[p.email]?.calendarNotify === true}
                           onChange={(e) => window.desktop?.setAccountPref({ email: p.email, calendarNotify: e.target.checked })}
                           className="h-3.5 w-3.5 accent-blue-600"
                         />
-                        Calendar
+                        {S.calendarToggle}
                       </label>
                     </div>
                     <button
                       onClick={() => setConfirmEmail(p.email)}
-                      aria-label="Remove account"
-                      title="Remove account"
+                      aria-label={S.removeAccount}
+                      title={S.removeAccount}
                       className="ml-1 flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-red-600/20 hover:text-red-400"
                     >
                       <TrashIcon className="h-4 w-4" />
@@ -397,8 +427,9 @@ export function SettingsPanel({
                 {confirmEmail === p.email && (
                   <div className="flex items-center justify-between gap-3 rounded-lg bg-red-100 px-3 py-2 dark:bg-red-950/40">
                     <span className="text-xs text-red-700 dark:text-red-200">
-                      Remove this account from the app? It stays signed in with Google — re-add it
-                      later with the <span className="font-semibold">+</span> button.
+                      {S.removeConfirmBefore}
+                      <span className="font-semibold">+</span>
+                      {S.removeConfirmAfter}
                     </span>
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -408,13 +439,13 @@ export function SettingsPanel({
                         }}
                         className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-red-500"
                       >
-                        Remove
+                        {S.remove}
                       </button>
                       <button
                         onClick={() => setConfirmEmail(null)}
                         className="rounded bg-neutral-300 px-2.5 py-1 text-xs text-neutral-900 transition hover:bg-neutral-400 dark:bg-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-600"
                       >
-                        Cancel
+                        {S.cancel}
                       </button>
                     </div>
                   </div>
@@ -424,7 +455,7 @@ export function SettingsPanel({
           })}
           {profiles.length === 0 && (
             <p className="rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-4 text-sm text-neutral-400">
-              No accounts detected yet.
+              {S.noAccounts}
             </p>
           )}
         </div>
@@ -433,12 +464,12 @@ export function SettingsPanel({
           onClick={onRedetect}
           className="w-fit rounded-lg bg-neutral-200 px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
         >
-          Re-detect accounts
+          {S.redetect}
         </button>
         <p className="mt-3 max-w-prose text-xs leading-relaxed text-neutral-500">
-          Accounts are detected from the Google accounts you are signed into. Use the{' '}
-          <span className="font-medium text-neutral-700 dark:text-neutral-300">+</span> button in the sidebar to sign in
-          to a new account, or add one via Gmail&apos;s own account switcher and then re-detect.
+          {S.accountsFootnoteBefore}
+          <span className="font-medium text-neutral-700 dark:text-neutral-300">+</span>
+          {S.accountsFootnoteAfter}
         </p>
       </div>
     </div>
