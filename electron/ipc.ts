@@ -22,6 +22,7 @@ export const IPC = {
   SET_THEME: 'prefs:theme', // send('system'|'light'|'dark')
   SET_NOTIFICATION_OPEN: 'prefs:notification-open', // send('app'|'window')
   SET_RENE_MODE: 'prefs:rene-mode', // send(boolean) — settings-page easter egg toggle
+  CHANGELOG_GET: 'changelog:get', // invoke() -> ChangelogVersion[] — parsed CHANGELOG.md
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
@@ -31,3 +32,5 @@ export const IPC = {
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
   NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(boolean)
 } as const;
+
+export type { ChangelogVersion, ChangelogEntry } from './changelog';

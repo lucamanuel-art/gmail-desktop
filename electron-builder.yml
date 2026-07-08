@@ -7,6 +7,7 @@ files:
   - renderer/out/**/*
   - assets/**/*
   - package.json
+  - CHANGELOG.md
 publish:
   provider: github
   owner: lucamanuel-art
