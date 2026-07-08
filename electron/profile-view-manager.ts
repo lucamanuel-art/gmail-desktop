@@ -23,6 +23,10 @@ const key = (index: number, surface: Surface) => `${index}:${surface}`;
 export class ProfileViewManager {
   private views = new Map<string, WebContentsView>();
   private activeKey: string | null = null;
+  // Views whose notification click the app just handled itself: Gmail's own
+  // click handler fires window.open with the same thread shortly after, which
+  // must be suppressed (it would open a duplicate window / force a reload).
+  private notifClickUntil = new Map<string, number>();
 
   constructor(
     private readonly win: BrowserWindow,
@@ -60,6 +64,7 @@ export class ProfileViewManager {
         this.onActivate(index, surface);
         void view.webContents.loadURL(url);
       },
+      isNotificationClickInFlight: () => Date.now() < (this.notifClickUntil.get(k) ?? 0),
     });
     view.webContents.on('ipc-message', (_e, channel, ...args) => {
       if (surface === 'mail') {
@@ -155,6 +160,10 @@ export class ProfileViewManager {
   getActiveZoomLevel(): number {
     if (!this.activeKey) return 0;
     return this.views.get(this.activeKey)?.webContents.getZoomLevel() ?? 0;
+  }
+
+  markNotificationClickHandled(index: number, surface: Surface, windowMs = 2500): void {
+    this.notifClickUntil.set(key(index, surface), Date.now() + windowMs);
   }
 
   // Opens a specific Gmail thread in the account's mail view via a hash-only

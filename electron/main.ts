@@ -303,6 +303,9 @@ function createWindow(): void {
       applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
     (index, surface, threadId) => {
+      // The app opens the clicked thread itself; Gmail's own click handler may
+      // fire window.open with the same thread right after — suppress that.
+      if (threadId && surface === 'mail') manager?.markNotificationClickHandled(index, 'mail');
       // "Open in a new window" mode: a clicked mail notification opens its
       // thread in a separate window; the main window is left as-is.
       if (threadId && surface === 'mail' && prefs?.getAll().notificationOpen === 'window') {
