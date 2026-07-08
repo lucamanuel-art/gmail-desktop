@@ -3,7 +3,7 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.1] — 2026-07-08
 
 ### Toegevoegd
 - **Google-apps per account** — naast Mail en Agenda opent elk account nu ook
