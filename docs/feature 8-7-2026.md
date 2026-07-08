@@ -15,32 +15,68 @@ Stand aan het eind van 7 juli. Alles staat op `master` (`origin/master`), workin
   - Een **testbare installer** voor 0.1.8 is gebouwd via de nieuwe workflow **"Build (no publish)"**
     → GitHub Actions → artefact `gmail-desktop-windows` (geen release).
 
-### Direct af te maken: 0.1.8 releasen
-1. **Smoke-test op Windows** (kon niet in WSL): melding-klik in-app vs nieuw venster, klik terwijl
-   geminimaliseerd → venster komt terug, externe links → browser (moet nog werken).
-2. Als goed → **release**: `git push origin v0.1.8` → CI (`.github/workflows/release.yml`) bouwt de
-   `.exe` en publiceert de GitHub-release + `latest.yml` (auto-update).
-   - Let op: de lokale tag `v0.1.8` staat al op commit `92caab4`. Als er ná die commit nog wijzigingen
-     komen vóór release, eerst de tag verplaatsen (`git tag -d v0.1.8 && git tag -a v0.1.8 -m ...`).
+### Direct af te maken: 0.1.8 releasen (bijgewerkt 8 juli)
+0.1.8 bevat nu óók de melding-klik-fix (opent de aangeklikte mail; instelling werkt) en de
+crash-fix voor zelf-sluitende views — zie de OPGELOST-secties hieronder. De agenda-fix zit er
+bewust NIET in (die is voor 0.1.9, branch `calendar-reminders-0.1.9`).
+1. **Lokaal testen op Windows**: installer is lokaal gebouwd (Windows Node via cmd.exe, zie
+   memory/handleiding) — `C:\Users\luca.manuel\gmail-desktop-build\dist\Gmail Desktop Setup 0.1.8.exe`.
+2. Als goed → **release**: tag `v0.1.8` verplaatsen naar de nieuwe commit
+   (`git tag -d v0.1.8 && git tag v0.1.8`) en pushen → CI bouwt + publiceert.
 
-## Openstaande bug (belangrijk): agenda-herinneringen vuren niet af
+## OPGELOST (8 juli): agenda-herinneringen vuren niet af
 
-- **Symptoom:** mail-meldingen werken; **agenda-herinneringen komen niet** (op de achtergrond).
-- **Wat al uitgesloten is:** DND uit, stille uren uit, per-account Mail-toggle aan. De config-desync
-  (per-account toggle toonde verkeerde stand) is al gefixt in 0.1.6 (`pushPrefs()` in `SET_ACCOUNT_PREF`).
-- **Hypothese (nog te bevestigen):** de agenda-view draait altijd **verborgen**; Chromium kan die als
-  "hidden" behandelen waardoor Google Agenda z'n `window.Notification` niet afvuurt — óf Google Agenda's
-  eigen bureaubladmelding staat uit / de afspraak heeft geen "Melding"-herinnering.
-- **Volgende stap (isolatietest, nog niet gedaan):**
-  1. Bevestig `"calendarNotify": true` in `%APPDATA%\gmail-desktop\prefs.json` voor het account.
-  2. In Google Agenda: Instellingen → Instellingen voor gebeurtenissen → Meldingen = **"Bureaubladmeldingen"**;
-     testafspraak met een **"Melding"**-herinnering ~2–5 min vooruit.
-  3. Klik de **agenda-knop** zodat de agenda zichtbaar/actief is en laat 'm open tot de herinneringstijd.
-  4. Komt de melding **wel** als zichtbaar maar **niet** als verborgen → dan is de "verborgen achtergrond-view"-aanpak
-     de oorzaak. Mogelijke oplossingen: agenda-view niet echt `setVisible(false)` maar off-screen houden,
-     of een andere bron (Calendar API met OAuth — zwaarder). Opnieuw scopen via brainstorm.
-- **Relevante code:** `syncCalendarViews()` in `main.ts`, `backgroundThrottling` in
-  `profile-view-manager.ts:ensureView`, `notificationsAllowed(..., 'calendar')` in `notification-policy.ts`.
+- **Symptoom was:** mail-meldingen werken; **agenda-herinneringen komen niet** (op de achtergrond).
+- **Root cause (bewezen met live CDP-instrumentatie op 8 juli):** Google Agenda vuurt herinneringen
+  **niet** via `new window.Notification(...)` (zoals Gmail) maar via
+  **`ServiceWorkerRegistration.showNotification(...)`** ("persistent notification"). Electron toont
+  persistent notifications helemaal niet (bekend, electron/electron#13041) én dat pad omzeilde onze
+  notify-allowed-gate en klik-routing. De verborgen view was NIET het probleem: de herinnering vuurde
+  exact op tijd vanuit de verborgen achtergrond-view (`document.visibilityState === 'hidden'`).
+- **Fix:** `rerouteServiceWorkerNotifications()` in `electron/preload.ts` — patcht
+  `ServiceWorkerRegistration.prototype.showNotification` zodat de aanroep door de bestaande (gegate,
+  klik-geroute) `window.Notification`-wrapper loopt. `actions` wordt gestript (alleen geldig voor
+  persistente meldingen); de ctor wordt bij aanroep opgelost zodat de gate-wrapper meedoet.
+- **Geverifieerd:** live in WSL met een echte Agenda-herinnering vanuit de verborgen view — de
+  SW-aanroep komt nu als `window.Notification`-constructie binnen (zelfde pad als mail, dat op
+  Windows aantoonbaar werkt). Unit tests: `tests/preload-sw-notifications.test.ts` (81 totaal groen).
+- **Nog te doen:** smoke-test op Windows (echte toast zichtbaar + klik opent agenda van het juiste
+  account). De code staat op branch **`calendar-reminders-0.1.9`** (bewust buiten 0.1.8 gehouden);
+  mergen + versie bumpen zodra 0.1.8 lokaal is goedgekeurd, en dan als **concept-release** (draft)
+  uitbrengen: zet daarbij `releaseType: draft` in `electron-builder.yml`.
+
+## OPGELOST (8 juli): melding-klik opent de mail niet / "When you click a notification" doet niets
+
+- **Root cause (bewezen met live CDP-experimenten):** Gmail's eigen notification-click-handler doet
+  in de wrapper **helemaal niets** — geen `window.open`, geen focus, geen navigatie — zelfs mét user
+  activation (A/B-getest). De 0.1.8-aanname dat een melding-klik de thread via `window.open` opent
+  (waar de instelling op gebouwd was) klopt dus niet: die popup komt er nooit, dus de instelling had
+  nooit effect en alleen ons eigen focus+switch gedrag draaide.
+- **Extra obstakel:** de melding zelf bevat géén thread-id (`tag` = accountmail, `data` = null).
+- **Fix:** de app zoekt de thread zelf op. `findThreadIdBySubject()` in `electron/preload.ts` matcht
+  de notification-body (= onderwerp) op de `data-legacy-thread-id`-spans in de inboxlijst
+  (locale-onafhankelijk attribuut; nieuwste rij eerst; prefix-match bij afgekapt onderwerp).
+  Klik stuurt `NOTIFICATION_ACTIVATE(threadId?)`; main routeert per `notificationOpen`:
+  - **in de app**: venster naar voren + hash-navigatie (`#inbox/<id>`, instant SPA) in de mail-view
+    (`ProfileViewManager.openMailThread`);
+  - **nieuw venster**: `openThreadWindow()` in `compose-window.ts` (eigen venster met de thread).
+  Geen thread gevonden → fallback = oud gedrag (inbox van het juiste account).
+- **Geverifieerd (live in WSL, echte zelf-gestuurde testmail):** klik in 'app'-modus opent exact de
+  juiste thread in-place; 'window'-modus opent een apart venster met die thread. Unit tests:
+  `tests/preload-thread-lookup.test.ts`.
+
+## OPGELOST (8 juli): main-process crash na window.close() vanuit een view
+
+- Gmail's losse compose (view=cm) sluit zichzelf na verzenden (`window.close()`); de view bleef in
+  de manager-map staan en de 60s-`refreshNotifyAllowed`-tick crashte op de vernietigde webContents
+  ("Cannot read properties of undefined (reading 'send')"). Fix: `destroyed`-listener ruimt de view
+  op + guard in `pushNotifyAllowed`. Live geverifieerd.
+
+## Release-flow: concept-releases (gepland voor 0.1.9)
+
+- Voor 0.1.9: zet `releaseType: draft` in `electron-builder.yml`. Een tag-push bouwt dan de
+  installer en zet hem als **concept-release** (draft) op GitHub; auto-update ziet 'm pas na
+  handmatig **"Publish release"**. 0.1.8 volgt nog de bestaande flow (`releaseType: release`).
 
 ## Backlog-feature A: Google-apps (Sheets/Docs/Drive/…)
 

@@ -3,7 +3,7 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
-## [0.1.8] — 2026-07-07
+## [0.1.8] — 2026-07-08
 
 ### Added
 - Choose how clicking a notification opens its message or event: **in the app**
@@ -14,6 +14,15 @@ to [Semantic Versioning](https://semver.org/).
 - Clicking a notification while the app is minimized now restores and focuses
   the window (with "Open in the app"), instead of leaving it minimized behind a
   stray window.
+- **Clicking a mail notification now opens the clicked message**, not just the
+  account's inbox. The "When you click a notification" setting now works as
+  intended: *in the app* opens the message in place, *in a new window* opens it
+  in its own window. (Gmail's notifications carry no message reference and its
+  own click handler does nothing inside the wrapper, so the app resolves the
+  message itself from the notification's subject.)
+- The app no longer crashes ("Cannot read properties of undefined") after a
+  Google page inside a view closes itself, e.g. Gmail's pop-out compose after
+  sending. Dead views are now cleaned up.
 
 ## [0.1.7] — 2026-07-07
 
