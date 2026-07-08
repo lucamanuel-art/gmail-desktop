@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SettingsPanel } from './SettingsPanel';
 import { CALENDAR_ICON_DATA_URI } from './calendar-icon-data';
+import { getStrings } from './strings';
 
 export interface Profile {
   index: number;
@@ -47,6 +48,7 @@ export interface Prefs {
   notificationOpen: 'app' | 'window';
   notifications: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } };
   accounts: Record<string, AccountPref>;
+  reneMode: boolean;
 }
 
 interface DesktopBridge {
@@ -71,6 +73,7 @@ interface DesktopBridge {
   setNotifications(arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void;
   setTheme(theme: 'system' | 'light' | 'dark'): void;
   setNotificationOpen(v: 'app' | 'window'): void;
+  setReneMode(v: boolean): void;
 }
 
 declare global {
@@ -140,6 +143,7 @@ export default function Sidebar() {
   const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' });
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [dragEmail, setDragEmail] = useState<string | null>(null);
+  const S = getStrings(prefs?.reneMode === true);
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -257,7 +261,7 @@ export default function Sidebar() {
               </div>
               <button
                 onClick={() => open(p.index, 'calendar')}
-                title={`${displayName(p)} — Calendar`}
+                title={`${displayName(p)}${S.calendarTooltipSuffix}`}
                 className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
                   calActive
                     ? 'bg-black/10 ring-1 ring-black/20 dark:bg-white/15 dark:ring-white/30'
@@ -274,7 +278,7 @@ export default function Sidebar() {
 
         <button
           onClick={addAccount}
-          title="Add account"
+          title={S.addAccountTooltip}
           className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-black/20 text-neutral-500 transition hover:border-black/40 hover:text-neutral-900 dark:border-white/20 dark:text-neutral-400 dark:hover:border-white/40 dark:hover:text-white"
         >
           <PlusIcon className="h-5 w-5" />
@@ -283,7 +287,7 @@ export default function Sidebar() {
         <div className="mt-auto">
           <button
             onClick={openSettings}
-            title="Settings"
+            title={S.settingsTooltip}
             className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
               settingsOpen
                 ? 'bg-black/10 text-neutral-900 dark:bg-white/15 dark:text-white'

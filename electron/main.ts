@@ -19,6 +19,7 @@ import { openCompose, openFullThreadWindow } from './compose-window';
 import { sortByOrder } from './account-order';
 import { notificationsAllowed } from './notification-policy';
 import { updateCheckPopup } from './update-popup';
+import { RENE_ZOOM_FACTOR, RENE_ZOOM_LEVEL } from './rene';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -234,6 +235,7 @@ function handleInput(index: number, input: KeyInput): void {
     const active = manager?.activeIndex();
     if (active != null) openCompose(active);
   } else if (action.type === 'zoom') {
+    if (prefs?.getAll().reneMode) return; // Rene mode pins everything at 200%
     const active = manager?.activeIndex();
     if (active == null) return;
     const current = manager!.getActiveZoomLevel();
@@ -243,6 +245,19 @@ function handleInput(index: number, input: KeyInput): void {
     const email = profiles.find((p) => p.index === active)?.email;
     if (email) prefs!.setAccount(email, { zoom: clamped });
   }
+}
+
+// Rene mode: zoom the sidebar renderer and every Gmail/Calendar view to 200%
+// (or restore factor 1 and each account's own stored zoom), then relayout so
+// the content view clears the now-wider sidebar.
+function applyReneZoom(): void {
+  if (!prefs || !mainWindow || mainWindow.isDestroyed()) return;
+  const on = prefs.getAll().reneMode;
+  mainWindow.webContents.setZoomFactor(on ? RENE_ZOOM_FACTOR : 1);
+  for (const p of profiles) {
+    manager?.setZoomForIndex(p.index, on ? RENE_ZOOM_LEVEL : prefs.getAccount(p.email).zoom ?? 0);
+  }
+  manager?.relayout();
 }
 
 let notifyTimer: ReturnType<typeof setInterval> | null = null;
@@ -354,10 +369,12 @@ function createWindow(): void {
     (index, identity) => onIdentity(index, identity),
     (index, input) => handleInput(index, input),
     (index) => {
+      if (prefs?.getAll().reneMode) return RENE_ZOOM_LEVEL;
       const email = profiles.find((p) => p.index === index)?.email;
       return email ? prefs!.getAccount(email).zoom ?? 0 : 0;
     },
     () => prefs?.getAll().notificationOpen ?? 'app',
+    () => (prefs?.getAll().reneMode ? RENE_ZOOM_FACTOR : 1),
   );
 
   if (DEV_URL) void mainWindow.loadURL(DEV_URL);
@@ -366,6 +383,7 @@ function createWindow(): void {
   mainWindow.webContents.on('did-finish-load', () => {
     pushProfiles(); // re-push on any (re)load so the sidebar repopulates
     pushPrefs();
+    applyReneZoom(); // a (re)load resets the renderer's zoom factor
     mainWindow?.webContents.send(IPC.UPDATE_STATUS, { ...lastUpdateStatus, currentVersion: app.getVersion() });
     if (!detectionStarted) {
       detectionStarted = true;
@@ -596,6 +614,11 @@ function registerIpc(): void {
   });
   ipcMain.on(IPC.SET_NOTIFICATION_OPEN, (_e, v: 'app' | 'window') => {
     prefs!.setNotificationOpen(v);
+    pushPrefs();
+  });
+  ipcMain.on(IPC.SET_RENE_MODE, (_e, v: boolean) => {
+    prefs!.setReneMode(v === true);
+    applyReneZoom();
     pushPrefs();
   });
 }

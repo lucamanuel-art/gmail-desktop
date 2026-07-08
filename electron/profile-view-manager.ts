@@ -44,6 +44,9 @@ export class ProfileViewManager {
     private readonly onInput: (index: number, input: KeyInput) => void,
     private readonly getZoom: (index: number) => number,
     private readonly getOpenMode: () => 'app' | 'window',
+    // Zoom factor of the sidebar renderer (2 in Rene mode) — the content view
+    // must sit past the visually wider sidebar.
+    private readonly getUiScale: () => number = () => 1,
   ) {
     this.win.on('resize', () => this.relayout());
   }
@@ -165,7 +168,7 @@ export class ProfileViewManager {
     // its contentView/getContentSize then throws "Object has been destroyed".
     if (this.win.isDestroyed()) return;
     const [width, height] = this.win.getContentSize();
-    view.setBounds(contentBounds({ width, height }));
+    view.setBounds(contentBounds({ width, height }, this.getUiScale()));
   }
 
   setZoomForIndex(index: number, level: number): void {

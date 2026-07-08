@@ -21,6 +21,7 @@ export const IPC = {
   SET_SNOOZE: 'prefs:snooze', // send(minutes: number | null) — >0 timed snooze, null = mute indefinitely, 0 = clear
   SET_THEME: 'prefs:theme', // send('system'|'light'|'dark')
   SET_NOTIFICATION_OPEN: 'prefs:notification-open', // send('app'|'window')
+  SET_RENE_MODE: 'prefs:rene-mode', // send(boolean) — settings-page easter egg toggle
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>

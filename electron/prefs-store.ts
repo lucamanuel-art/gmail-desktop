@@ -38,6 +38,9 @@ export interface Prefs {
   notificationOpen: NotificationOpen;
   notifications: NotificationPrefs;
   accounts: Record<string, AccountPref>;
+  // Easter egg: everything at 200% and the UI in simple Dutch. Toggled only by
+  // the secret key sequence on the settings page.
+  reneMode: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -47,6 +50,7 @@ export const DEFAULT_PREFS: Prefs = {
   notificationOpen: 'app',
   notifications: { dnd: false, quietHours: { enabled: false, start: '18:00', end: '08:00' } },
   accounts: {},
+  reneMode: false,
 };
 
 export class PrefsStore {
@@ -70,6 +74,7 @@ export class PrefsStore {
         accounts: raw.accounts && typeof raw.accounts === 'object' && !Array.isArray(raw.accounts)
           ? raw.accounts
           : {},
+        reneMode: typeof raw.reneMode === 'boolean' ? raw.reneMode : false,
       };
     } catch {
       return structuredClone(DEFAULT_PREFS);
@@ -95,6 +100,9 @@ export class PrefsStore {
   }
   setNotifications(n: NotificationPrefs): void {
     this.write({ ...this.getAll(), notifications: n });
+  }
+  setReneMode(v: boolean): void {
+    this.write({ ...this.getAll(), reneMode: v });
   }
   getAccount(email: string): AccountPref {
     return this.getAll().accounts[email] ?? {};
