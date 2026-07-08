@@ -15,7 +15,7 @@ import { IPC } from './ipc';
 import { shouldHideOnClose, createTray } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
 import { resolveShortcut, type KeyInput } from './shortcuts';
-import { openCompose, openThreadWindow } from './compose-window';
+import { openCompose, openFullThreadWindow } from './compose-window';
 import { sortByOrder } from './account-order';
 import { notificationsAllowed } from './notification-policy';
 
@@ -304,12 +304,18 @@ function createWindow(): void {
     },
     (index, surface, threadId) => {
       // The app opens the clicked thread itself; Gmail's own click handler may
-      // fire window.open with the same thread right after — suppress that.
+      // fire window.open with the same thread right after — suppress that
+      // (genuine pop-out windows are exempted in windowOpenAction).
       if (threadId && surface === 'mail') manager?.markNotificationClickHandled(index, 'mail');
-      // "Open in a new window" mode: a clicked mail notification opens its
-      // thread in a separate window; the main window is left as-is.
-      if (threadId && surface === 'mail' && prefs?.getAll().notificationOpen === 'window') {
-        openThreadWindow(index, threadId);
+      const windowMode = prefs?.getAll().notificationOpen === 'window';
+      // "Open in a new window" mode: open the thread in the mail view so Gmail's
+      // own pop-out button exists, then trigger it for a focused reading window.
+      // Fall back to a full thread window if the button can't be found.
+      if (threadId && surface === 'mail' && windowMode) {
+        manager?.openMailThread(index, threadId);
+        void manager?.popOutThread(index).then((ok) => {
+          if (!ok) openFullThreadWindow(index, threadId);
+        });
         return;
       }
       if (mainWindow) {

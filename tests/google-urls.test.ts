@@ -5,6 +5,7 @@ import {
   addAccountUrl,
   isInAppUrl,
   isGoogleUrl,
+  isPopoutUrl,
 } from '../electron/google-urls';
 
 describe('google urls', () => {
@@ -20,6 +21,11 @@ describe('google urls', () => {
     expect(addAccountUrl()).toBe(
       'https://accounts.google.com/AddSession?continue=https://mail.google.com/mail/',
     );
+  });
+  it('detects Gmail pop-out urls', () => {
+    expect(isPopoutUrl('https://mail.google.com/mail/u/0/popout?search=all&th=x')).toBe(true);
+    expect(isPopoutUrl('https://mail.google.com/mail/u/0/#inbox/abc')).toBe(false);
+    expect(isPopoutUrl('not a url')).toBe(false);
   });
 });
 

@@ -181,6 +181,34 @@ export class ProfileViewManager {
     void wc.executeJavaScript(`location.hash = ${JSON.stringify(`#inbox/${threadId}`)}`);
   }
 
+  // Triggers Gmail's own "open in a new window" (pop-out) button in the mail
+  // view. Only Gmail itself can open a working pop-out — the page needs the
+  // opener that set up its content feed — so we click the real button and let
+  // the resulting window.open through (a pop-out URL is always allowed). The
+  // caller must have opened the thread first so the button exists. Matched by
+  // Gmail's stable jslog action id, then a localized aria-label as a fallback.
+  // Resolves true once clicked, false if the button never appears (~3s).
+  async popOutThread(index: number): Promise<boolean> {
+    const wc = this.views.get(key(index, 'mail'))?.webContents;
+    if (!wc || wc.isDestroyed()) return false;
+    const clickScript = `(() => {
+      const byLog = Array.from(document.querySelectorAll('button[jslog],[role="button"][jslog]'))
+        .find((b) => /(?:^|[;\\s])170693(?:[;\\s]|$)/.test(b.getAttribute('jslog') || ''));
+      const byLabel = () => Array.from(document.querySelectorAll('[aria-label]'))
+        .find((b) => /nieuw venster|new window|nouvelle fen|neues fenster|nueva ventana|ventana nueva/i
+          .test(b.getAttribute('aria-label') || ''));
+      const btn = byLog || byLabel();
+      if (btn) { btn.click(); return true; }
+      return false;
+    })()`;
+    for (let i = 0; i < 12; i++) {
+      const clicked = await wc.executeJavaScript(clickScript).catch(() => false);
+      if (clicked) return true;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return false;
+  }
+
   pushNotifyAllowed(index: number, surface: Surface, allowed: boolean): void {
     const wc = this.views.get(key(index, surface))?.webContents;
     if (!wc || wc.isDestroyed()) return;

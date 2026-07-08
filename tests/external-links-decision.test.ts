@@ -24,4 +24,10 @@ describe('windowOpenAction', () => {
     expect(windowOpenAction('https://mail.google.com/mail/u/0/#inbox/abc', 'window', false)).toBe('allow');
     expect(windowOpenAction('https://accounts.google.com/signin', 'window', false)).toBe('allow');
   });
+
+  it('always allows Gmail pop-out windows, even during suppression', () => {
+    const popout = 'https://mail.google.com/mail/u/0/popout?search=all&th=x';
+    expect(windowOpenAction(popout, 'app', true)).toBe('allow');
+    expect(windowOpenAction(popout, 'window', true)).toBe('allow');
+  });
 });

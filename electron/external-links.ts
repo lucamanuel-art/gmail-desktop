@@ -1,5 +1,5 @@
 import { shell, type WebContents } from 'electron';
-import { isInAppUrl, isGoogleUrl } from './google-urls';
+import { isInAppUrl, isGoogleUrl, isPopoutUrl } from './google-urls';
 
 // Routes links that don't belong to the in-app Gmail/Calendar/auth surfaces to
 // the user's default browser instead of opening them inside the mail view.
@@ -22,6 +22,10 @@ export function windowOpenAction(
   suppressed: boolean,
 ): WindowOpenAction {
   if (!isInAppUrl(url)) return 'open-external';
+  // Gmail's focused pop-out reading window must always open as a real window —
+  // only Gmail can produce a working one, and it's exactly what "open in a new
+  // window" mode triggers. Never suppress or redirect it in-app.
+  if (isPopoutUrl(url)) return 'allow';
   if (suppressed) return 'suppress';
   return mode === 'app' ? 'open-in-app' : 'allow';
 }

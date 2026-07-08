@@ -6,6 +6,17 @@ export function calendarUrl(index: number): string {
   return `https://calendar.google.com/calendar/u/${index}/r`;
 }
 
+// Gmail's focused single-message reading window lives under a /popout path.
+// Such a window.open must always be allowed through as a real window (never
+// suppressed or redirected in-app), since only Gmail can open a working one.
+export function isPopoutUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.includes('/popout');
+  } catch {
+    return false;
+  }
+}
+
 // Hosts served inside the app windows themselves: Gmail, Calendar and the
 // Google auth flow. Navigations and popups to these stay in-app; everything
 // else (links clicked inside an email, including Google's www.google.com/url

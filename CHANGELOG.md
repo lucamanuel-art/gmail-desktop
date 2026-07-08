@@ -24,9 +24,11 @@ to [Semantic Versioning](https://semver.org/).
 - **Clicking a mail notification now opens the clicked message**, not just the
   account's inbox. The "When you click a notification" setting now works as
   intended: *in the app* opens the message in place, *in a new window* opens it
-  in its own window. (Gmail's notifications carry no message reference and its
-  own click handler does nothing inside the wrapper, so the app resolves the
-  message itself from the notification's subject.)
+  in Gmail's focused pop-out reading window (just the message, without the
+  sidebar/search chrome). (Gmail's notifications carry no message reference and
+  its own click handler does nothing inside the wrapper, so the app resolves the
+  message from the notification's subject and triggers Gmail's own pop-out; if
+  that button can't be found it falls back to a full thread window.)
 - The app no longer crashes ("Cannot read properties of undefined") after a
   Google page inside a view closes itself, e.g. Gmail's pop-out compose after
   sending. Dead views are now cleaned up.
