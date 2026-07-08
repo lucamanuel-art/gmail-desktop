@@ -3,6 +3,16 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] — 2026-07-08
+
+### Opgelost
+- Herinneringen uit Google Agenda komen nu ook echt binnen als melding op je
+  computer. Eerst stuurde de agenda die herinneringen op een manier weg die de
+  app niet kon laten zien, dus zag je ze niet. Nu laat de app ze wel zien. Ze
+  luisteren netjes naar je instellingen: staat "niet storen" of de stille uren
+  aan, of heb je agenda-meldingen voor dat account uitgezet, dan blijft het
+  stil. Klik je op zo'n herinnering, dan gaat de agenda van dat account open.
+
 ## [0.1.8] — 2026-07-08
 
 ### Added
