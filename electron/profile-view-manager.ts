@@ -27,6 +27,10 @@ export class ProfileViewManager {
   // click handler fires window.open with the same thread shortly after, which
   // must be suppressed (it would open a duplicate window / force a reload).
   private notifClickUntil = new Map<string, number>();
+  // Views for which the app is actively triggering Gmail's pop-out button, so
+  // the resulting pop-out window.open should be allowed through (vs Gmail's own
+  // auto pop-out on a notification click, which is suppressed).
+  private popoutExpectUntil = new Map<string, number>();
 
   constructor(
     private readonly win: BrowserWindow,
@@ -65,6 +69,7 @@ export class ProfileViewManager {
         void view.webContents.loadURL(url);
       },
       isNotificationClickInFlight: () => Date.now() < (this.notifClickUntil.get(k) ?? 0),
+      isPopoutExpected: () => Date.now() < (this.popoutExpectUntil.get(k) ?? 0),
     });
     view.webContents.on('ipc-message', (_e, channel, ...args) => {
       if (surface === 'mail') {
@@ -189,8 +194,11 @@ export class ProfileViewManager {
   // Gmail's stable jslog action id, then a localized aria-label as a fallback.
   // Resolves true once clicked, false if the button never appears (~3s).
   async popOutThread(index: number): Promise<boolean> {
-    const wc = this.views.get(key(index, 'mail'))?.webContents;
+    const k = key(index, 'mail');
+    const wc = this.views.get(k)?.webContents;
     if (!wc || wc.isDestroyed()) return false;
+    // Allow the pop-out window.open that our button click is about to produce.
+    this.popoutExpectUntil.set(k, Date.now() + 6000);
     const clickScript = `(() => {
       const byLog = Array.from(document.querySelectorAll('button[jslog],[role="button"][jslog]'))
         .find((b) => /(?:^|[;\\s])170693(?:[;\\s]|$)/.test(b.getAttribute('jslog') || ''));

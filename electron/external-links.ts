@@ -12,20 +12,26 @@ import { isInAppUrl, isGoogleUrl, isPopoutUrl } from './google-urls';
 //   internal redirects keep working.
 export type WindowOpenAction = 'open-external' | 'suppress' | 'open-in-app' | 'allow';
 
-// Pure decision for a window.open from inside a view. `suppressed` is true
-// right after the app itself handled a notification click: Gmail's own click
-// handler then ALSO calls window.open with the thread permalink, which would
-// give a second window ('window' mode) or a slow full reload ('app' mode).
+// Pure decision for a window.open from inside a view.
+// - `suppressed` is true right after the app handled a notification click:
+//   Gmail's own click handler then ALSO opens the thread (a normal window or
+//   its focused pop-out), which would be a duplicate/stray window.
+// - `popoutExpected` is true only while the app is deliberately triggering
+//   Gmail's pop-out button (window mode). A pop-out window.open is allowed only
+//   then, or when nothing is being suppressed (a manual ↗ click by the user).
+//   During a notification click we did NOT initiate, a pop-out is suppressed.
 export function windowOpenAction(
   url: string,
   mode: 'app' | 'window',
   suppressed: boolean,
+  popoutExpected: boolean,
 ): WindowOpenAction {
   if (!isInAppUrl(url)) return 'open-external';
-  // Gmail's focused pop-out reading window must always open as a real window —
-  // only Gmail can produce a working one, and it's exactly what "open in a new
-  // window" mode triggers. Never suppress or redirect it in-app.
-  if (isPopoutUrl(url)) return 'allow';
+  if (isPopoutUrl(url)) {
+    if (popoutExpected) return 'allow'; // the pop-out we deliberately triggered
+    if (suppressed) return 'suppress'; // Gmail's own auto pop-out on a notification click
+    return 'allow'; // a manual ↗ click by the user
+  }
   if (suppressed) return 'suppress';
   return mode === 'app' ? 'open-in-app' : 'allow';
 }
@@ -36,6 +42,7 @@ export function attachExternalLinkHandling(
     getOpenMode?: () => 'app' | 'window';
     openInApp?: (url: string) => void;
     isNotificationClickInFlight?: () => boolean;
+    isPopoutExpected?: () => boolean;
   },
 ): void {
   webContents.setWindowOpenHandler(({ url }) => {
@@ -43,6 +50,7 @@ export function attachExternalLinkHandling(
       url,
       opts?.getOpenMode?.() ?? 'window',
       opts?.isNotificationClickInFlight?.() ?? false,
+      opts?.isPopoutExpected?.() ?? false,
     );
     if (action === 'open-in-app' && opts?.openInApp) {
       opts.openInApp(url);
