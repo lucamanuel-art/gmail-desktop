@@ -5,25 +5,32 @@ to [Semantic Versioning](https://semver.org/).
 
 ## [0.2.0] — 2026-07-08
 
-### Toegevoegd
-- Het menu bij het systeemvak-icoon (rechtsklik) kan nu meer:
-  - **Meldingen tijdelijk dempen** — voor 10, 30 of 60 minuten, of "totdat ik ze
-    weer aanzet". Het menu laat zien tot hoe laat het stil is; na afloop komen de
-    meldingen vanzelf weer binnen. "Meldingen aanzetten" heft het dempen meteen op.
-  - **Controleren op updates** — met een label dat meebeweegt met de status
-    (beschikbaar, downloaden, opnieuw opstarten om te installeren, …).
-  - **Opstarten bij inloggen** — een vinkje dat gelijk loopt met dezelfde
-    instelling in het instellingenscherm.
-
 ### Added
-- The tray icon's right-click menu can now do more:
+- **The tray icon's right-click menu can now do more:**
   - **Snooze notifications** — for 10, 30 or 60 minutes, or "until I turn them
-    back on". The menu shows when notifications resume; a timed snooze clears
-    itself when it expires, and "Turn notifications on" lifts it immediately.
-  - **Check for updates** — with a label that follows the updater state
-    (available, downloading, restart to install, …).
+    back on". The menu shows when notifications will resume; a timed snooze
+    clears itself when it expires, and "Turn notifications on" lifts it
+    immediately.
+  - **Check for updates** straight from the tray. It brings the window forward,
+    opens Settings, and once the check finishes shows a small popup: a newer
+    version is available (with a Download button), you're already on the latest
+    version, or the check couldn't be completed.
   - **Start at login** — a checkbox kept in sync with the same setting in
     Settings.
+
+### Toegevoegd
+- **In het kleine menu (rechtsklik op het plaatje onderin je scherm) kun je nu
+  meer doen:**
+  - **Even geen piepjes.** Kies 10, 30 of 60 minuten stil, of "totdat ik ze weer
+    aanzet". Het menu laat zien tot hoe laat het stil blijft. Is de tijd om? Dan
+    komen de piepjes vanzelf weer terug. Wil je ze eerder terug? Klik op "Piepjes
+    weer aan".
+  - **Kijken of er iets nieuws is.** De app kijkt of er een nieuwere versie is.
+    Het venster komt naar voren en de instellingen gaan open. Is er iets nieuws?
+    Dan kun je op de knop klikken om het op te halen. Is alles al goed? Dan zegt
+    de app dat. Lukt het kijken niet? Dan zegt de app dat ook.
+  - **Vanzelf opstarten.** Zet dit vinkje aan. Dan gaat de app vanzelf aan als je
+    de computer aanzet.
 
 ## [0.1.9] — 2026-07-08
 
