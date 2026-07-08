@@ -1,0 +1,181 @@
+// All user-facing text in the app's own chrome (sidebar + settings), in two
+// flavors: the normal English UI and Rene mode's simple Dutch — short words a
+// four-year-old can read. Gmail's own page content is Google's and stays as-is.
+
+export interface UiStrings {
+  settingsTitle: string;
+  save: string;
+  saved: string;
+  close: string;
+  reneBanner: string;
+
+  sectionGeneral: string;
+  autoStart: string;
+  theme: string;
+  themeSystem: string;
+  themeLight: string;
+  themeDark: string;
+  notificationOpenLabel: string;
+  openInApp: string;
+  openInWindow: string;
+
+  sectionNotifications: string;
+  dnd: string;
+  quietHours: string;
+  from: string;
+  to: string;
+
+  sectionAbout: string;
+  versionPrefix: string;
+  updateNow: string;
+  restartInstall: string;
+  checkForUpdates: string;
+  checking: string;
+  updChecking: string;
+  updAvailable: (version: string) => string;
+  updLatest: string;
+  updDownloading: (percent: number) => string;
+  updDownloaded: string;
+  updError: (message: string) => string;
+  updDev: string;
+
+  sectionAccounts: string;
+  mailToggle: string;
+  mailToggleTitle: string;
+  calendarToggle: string;
+  calendarToggleTitle: string;
+  removeAccount: string;
+  removeConfirmBefore: string; // text before the styled "+" in the confirm box
+  removeConfirmAfter: string;
+  remove: string;
+  cancel: string;
+  redetect: string;
+  noAccounts: string;
+  accountsFootnoteBefore: string; // text before the styled "+" in the footnote
+  accountsFootnoteAfter: string;
+
+  addAccountTooltip: string;
+  settingsTooltip: string;
+  calendarTooltipSuffix: string;
+}
+
+export const STRINGS_NORMAL: UiStrings = {
+  settingsTitle: 'Settings',
+  save: 'Save',
+  saved: 'Saved ✓',
+  close: 'Close',
+  reneBanner: '🤓 Rene mode is on! Everything is big and easy.',
+
+  sectionGeneral: 'General',
+  autoStart: 'Start Gmail Desktop when I sign in',
+  theme: 'Theme',
+  themeSystem: 'System',
+  themeLight: 'Light',
+  themeDark: 'Dark',
+  notificationOpenLabel: 'When you click a notification',
+  openInApp: 'Open in the app',
+  openInWindow: 'Open in a new window',
+
+  sectionNotifications: 'Notifications',
+  dnd: 'Do not disturb (mute all)',
+  quietHours: 'Quiet hours',
+  from: 'From',
+  to: 'to',
+
+  sectionAbout: 'About & updates',
+  versionPrefix: 'Version',
+  updateNow: 'Update now',
+  restartInstall: 'Restart & install',
+  checkForUpdates: 'Check for updates',
+  checking: 'Checking…',
+  updChecking: 'Checking for updates…',
+  updAvailable: (version) => `Update available: v${version}`,
+  updLatest: "You're on the latest version.",
+  updDownloading: (percent) => `Downloading update… ${percent}%`,
+  updDownloaded: 'Update downloaded — restarting to install…',
+  updError: (message) => `Couldn't check for updates: ${message}`,
+  updDev: 'Updates are only available in the installed app.',
+
+  sectionAccounts: 'Accounts',
+  mailToggle: 'Mail',
+  mailToggleTitle: 'Mail notifications for this account',
+  calendarToggle: 'Calendar',
+  calendarToggleTitle: 'Calendar reminders for this account',
+  removeAccount: 'Remove account',
+  removeConfirmBefore:
+    'Remove this account from the app? It stays signed in with Google — re-add it later with the ',
+  removeConfirmAfter: ' button.',
+  remove: 'Remove',
+  cancel: 'Cancel',
+  redetect: 'Re-detect accounts',
+  noAccounts: 'No accounts detected yet.',
+  accountsFootnoteBefore:
+    'Accounts are detected from the Google accounts you are signed into. Use the ',
+  accountsFootnoteAfter:
+    " button in the sidebar to sign in to a new account, or add one via Gmail's own account switcher and then re-detect.",
+
+  addAccountTooltip: 'Add account',
+  settingsTooltip: 'Settings',
+  calendarTooltipSuffix: ' — Calendar',
+};
+
+export const STRINGS_RENE: UiStrings = {
+  settingsTitle: 'Knopjes',
+  save: 'Bewaar',
+  saved: 'Klaar ✓',
+  close: 'Sluiten',
+  reneBanner: '🤓 De Rene-stand staat aan! Alles is groot en makkelijk.',
+
+  sectionGeneral: 'Gewoon',
+  autoStart: 'De app gaat zelf aan',
+  theme: 'Kleur',
+  themeSystem: 'De computer kiest',
+  themeLight: 'Licht',
+  themeDark: 'Donker',
+  notificationOpenLabel: 'Als je op een melding klikt',
+  openInApp: 'In de app',
+  openInWindow: 'In een nieuw raam',
+
+  sectionNotifications: 'Meldingen',
+  dnd: 'Even stil zijn',
+  quietHours: 'Stille uren',
+  from: 'Van',
+  to: 'tot',
+
+  sectionAbout: 'Over de app',
+  versionPrefix: 'Versie',
+  updateNow: 'Doe maar!',
+  restartInstall: 'Opnieuw opstarten',
+  checkForUpdates: 'Is er iets nieuws?',
+  checking: 'Even kijken…',
+  updChecking: 'Even kijken…',
+  updAvailable: (version) => `Er is iets nieuws: v${version}`,
+  updLatest: 'Je hebt al het nieuwste.',
+  updDownloading: (percent) => `Het komt eraan… ${percent}%`,
+  updDownloaded: 'Het is er! De app gaat uit en aan…',
+  updError: (message) => `Het lukt nu niet: ${message}`,
+  updDev: 'Dit kan alleen in de echte app.',
+
+  sectionAccounts: 'Wie doet mee?',
+  mailToggle: 'Post',
+  mailToggleTitle: 'Meldingen voor de post van deze meneer of mevrouw',
+  calendarToggle: 'Agenda',
+  calendarToggleTitle: 'Meldingen voor de agenda van deze meneer of mevrouw',
+  removeAccount: 'Weg ermee',
+  removeConfirmBefore: 'Mag deze weg uit de app? Je kan hem later weer terug doen met de ',
+  removeConfirmAfter: ' knop.',
+  remove: 'Weg',
+  cancel: 'Nee',
+  redetect: 'Zoek nog een keer',
+  noAccounts: 'Er is nog niemand.',
+  accountsFootnoteBefore: 'De app zoekt zelf wie er mee doet. Druk op de ',
+  accountsFootnoteAfter: ' om er iemand bij te doen.',
+
+  addAccountTooltip: 'Doe er iemand bij',
+  settingsTooltip: 'Knopjes',
+  calendarTooltipSuffix: ' — Agenda',
+};
+
+export function getStrings(reneMode: boolean): UiStrings {
+  return reneMode ? STRINGS_RENE : STRINGS_NORMAL;
+}
