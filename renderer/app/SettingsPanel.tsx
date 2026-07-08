@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Prefs } from './page';
+import { isCompleteTime } from './settings-utils';
 
 interface Profile {
   index: number;
@@ -100,6 +101,36 @@ export function SettingsPanel({
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
 
+  // "Saved ✓" feedback: flash whenever the main process echoes updated prefs
+  // (the write already happened by then), and when Save is pressed.
+  const [savedFlash, setSavedFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstPrefs = useRef(true);
+  const flashSaved = () => {
+    setSavedFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setSavedFlash(false), 2000);
+  };
+  useEffect(() => {
+    if (!prefs) return;
+    if (firstPrefs.current) {
+      firstPrefs.current = false;
+      return;
+    }
+    flashSaved();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs]);
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+  }, []);
+
+  // Every control applies immediately; Save additionally commits an in-progress
+  // label edit (which normally commits on blur/Enter) and confirms visually.
+  const saveNow = () => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    flashSaved();
+  };
+
   const busy = update.state === 'checking' || update.state === 'downloading';
   const statusText = updateStatusText(update);
 
@@ -108,12 +139,28 @@ export function SettingsPanel({
       <div className="mx-auto w-full max-w-2xl px-8 py-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <button
-            onClick={onClose}
-            className="rounded-lg bg-neutral-200 px-3.5 py-1.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <span
+              aria-live="polite"
+              className={`text-xs font-medium text-green-600 transition-opacity duration-300 dark:text-green-400 ${
+                savedFlash ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              Saved ✓
+            </span>
+            <button
+              onClick={saveNow}
+              className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
+            >
+              Save
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg bg-neutral-200 px-3.5 py-1.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
@@ -190,9 +237,10 @@ export function SettingsPanel({
               <span>From</span>
               <input
                 type="time"
-                value={prefs.notifications.quietHours.start}
+                defaultValue={prefs.notifications.quietHours.start}
                 onChange={(e) => {
-                  if (!prefs) return;
+                  // '' fires while a segment is half-typed; only save complete times.
+                  if (!prefs || !isCompleteTime(e.target.value)) return;
                   onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, start: e.target.value } });
                 }}
                 className="rounded bg-neutral-200 px-2 py-1 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
@@ -200,9 +248,9 @@ export function SettingsPanel({
               <span>to</span>
               <input
                 type="time"
-                value={prefs.notifications.quietHours.end}
+                defaultValue={prefs.notifications.quietHours.end}
                 onChange={(e) => {
-                  if (!prefs) return;
+                  if (!prefs || !isCompleteTime(e.target.value)) return;
                   onSetNotifications({ dnd: prefs!.notifications.dnd, quietHours: { ...prefs!.notifications.quietHours, end: e.target.value } });
                 }}
                 className="rounded bg-neutral-200 px-2 py-1 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
@@ -289,6 +337,10 @@ export function SettingsPanel({
                     <input
                       defaultValue={p.label ?? p.name ?? ''}
                       placeholder={p.name || p.email}
+                      onKeyDown={(e) => {
+                        // Commit on Enter — blur triggers the save below.
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
                       onBlur={(e) => {
                         const v = e.target.value.trim();
                         if (v !== (p.label ?? p.name ?? '')) window.desktop?.setAccountPref({ email: p.email, label: v });
