@@ -78,9 +78,18 @@ bewust NIET in (die is voor 0.1.9, branch `calendar-reminders-0.1.9`).
   installer en zet hem als **concept-release** (draft) op GitHub; auto-update ziet 'm pas na
   handmatig **"Publish release"**. 0.1.8 volgt nog de bestaande flow (`releaseType: release`).
 
-## Backlog-feature A: Google-apps (Sheets/Docs/Drive/…)
+## Backlog-feature A: Google-apps (Sheets/Docs/Drive/…) — GEBOUWD (8 juli, branch `worktree-google-apps`)
 
-Aanpak (uit scoping): volg het bestaande surface-patroon (`/u/<N>/` per account).
+Gebouwd volgens de aanbevelingen hieronder: 7 apps in v1, waffle-flyout per account
+(inline accordeon in de sidebar — een zwevende flyout kan niet, WebContentsViews liggen
+bóven de venster-content), geen notificaties voor de nieuwe surfaces. `Surface` is
+geconsolideerd naar `renderer/lib/surfaces.ts` (`SURFACES` + `SURFACE_CONFIG` +
+`surfaceForUrl`). Extra: in-app links (bv. een Docs-link in een mail) openen nu in de
+view van de eigen surface i.p.v. de mail-view te overschrijven. Ontwerp:
+`docs/superpowers/specs/2026-07-08-google-apps-design.md`. Live gesmoke-test in WSL
+(waffle → Drive-view, window.open naar Docs → docs-surface). Nog niet gemerged.
+
+Oorspronkelijke aanpak (uit scoping): volg het bestaande surface-patroon (`/u/<N>/` per account).
 
 - **v1 apps (veilig, zelfde `/u/N/`-vorm):** Drive `drive.google.com/drive/u/<N>/my-drive`,
   Docs `docs.google.com/document/u/<N>/`, Sheets `.../spreadsheets/u/<N>/`,

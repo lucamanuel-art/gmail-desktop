@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { SettingsPanel } from './SettingsPanel';
 import { CALENDAR_ICON_DATA_URI } from './calendar-icon-data';
 import { getStrings } from './strings';
+import { APP_SURFACES, SURFACE_CONFIG, type Surface } from '../lib/surfaces';
+import { APP_ICONS, WaffleIcon } from './app-icons';
 
 export interface Profile {
   index: number;
@@ -14,7 +16,7 @@ export interface Profile {
   order?: number;
   label?: string;
 }
-export type Surface = 'mail' | 'calendar';
+export type { Surface };
 
 export type UpdateState =
   | 'idle'
@@ -144,6 +146,8 @@ export default function Sidebar() {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [dragEmail, setDragEmail] = useState<string | null>(null);
   const S = getStrings(prefs?.reneMode === true);
+  // Account index whose waffle (Google apps) flyout is expanded; one at a time.
+  const [appsOpenFor, setAppsOpenFor] = useState<number | null>(null);
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -180,8 +184,12 @@ export default function Sidebar() {
 
   function open(index: number, surface: Surface) {
     if (settingsOpen) setSettingsOpen(false);
+    setAppsOpenFor(null);
     setActive({ index, surface });
     window.desktop?.switchSurface(index, surface);
+  }
+  function toggleApps(index: number) {
+    setAppsOpenFor((cur) => (cur === index ? null : index));
   }
   function addAccount() {
     if (settingsOpen) setSettingsOpen(false);
@@ -193,6 +201,7 @@ export default function Sidebar() {
   }
   function openSettings() {
     setSettingsOpen(true);
+    setAppsOpenFor(null);
     window.desktop?.toggleSettings(true);
   }
   function closeSettings() {
@@ -213,9 +222,14 @@ export default function Sidebar() {
   return (
     <div className="flex h-screen w-full bg-neutral-100 text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
       <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 py-4">
+        {/* Scrollable so an expanded waffle never pushes settings off-screen. */}
+        <div className="flex w-full flex-col items-center gap-2 overflow-y-auto [scrollbar-width:none]">
         {profiles.map((p) => {
           const mailActive = active?.index === p.index && active.surface === 'mail';
           const calActive = active?.index === p.index && active.surface === 'calendar';
+          const appActive =
+            active?.index === p.index && active.surface !== 'mail' && active.surface !== 'calendar';
+          const appsOpen = appsOpenFor === p.index;
           const showImg = p.avatarUrl && !brokenAvatars[p.avatarUrl];
           const count = unread[p.index] ?? 0;
           return (
@@ -270,9 +284,43 @@ export default function Sidebar() {
               >
                 <CalendarIcon className="h-5 w-5" />
               </button>
+              <button
+                onClick={() => toggleApps(p.index)}
+                title={`${displayName(p)} — Google apps`}
+                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
+                  appActive || appsOpen
+                    ? 'bg-black/10 text-neutral-900 ring-1 ring-black/20 dark:bg-white/15 dark:text-white dark:ring-white/30'
+                    : 'text-neutral-500 opacity-70 hover:bg-black/5 hover:opacity-100 dark:text-neutral-400 dark:hover:bg-white/10'
+                }`}
+              >
+                <WaffleIcon className="h-4 w-4" />
+              </button>
+              {appsOpen && (
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-black/5 p-1.5 dark:bg-white/5">
+                  {APP_SURFACES.map((s) => {
+                    const Icon = APP_ICONS[s];
+                    const isActive = active?.index === p.index && active.surface === s;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => open(p.index, s)}
+                        title={`${displayName(p)} — ${SURFACE_CONFIG[s].label}`}
+                        className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
+                          isActive
+                            ? 'bg-black/10 text-neutral-900 ring-1 ring-black/20 dark:bg-white/15 dark:text-white dark:ring-white/30'
+                            : 'text-neutral-500 hover:bg-black/5 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white'
+                        }`}
+                      >
+                        {Icon && <Icon className="h-4 w-4" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
+        </div>
 
         <div className="my-1 h-px w-8 shrink-0 bg-black/10 dark:bg-white/10" />
 

@@ -1,4 +1,5 @@
 import type { Prefs } from './prefs-store';
+import type { Surface } from '../renderer/lib/surfaces';
 
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
@@ -17,7 +18,7 @@ export function notificationsAllowed(
   prefs: Prefs,
   email: string,
   now: Date,
-  surface: 'mail' | 'calendar' = 'mail',
+  surface: Surface = 'mail',
 ): boolean {
   const { dnd, dndUntil, quietHours } = prefs.notifications;
   if (dnd) return false;
@@ -30,5 +31,6 @@ export function notificationsAllowed(
   }
   const account = prefs.accounts[email];
   if (surface === 'calendar') return account?.calendarNotify === true;
+  if (surface !== 'mail') return false; // v1: the other Google apps never notify
   return account?.notify !== false;
 }

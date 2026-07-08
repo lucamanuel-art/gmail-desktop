@@ -3,6 +3,25 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — 2026-07-08
+
+### Toegevoegd
+- **Google-apps per account** — naast Mail en Agenda opent elk account nu ook
+  Drive, Documenten, Spreadsheets, Presentaties, Keep, Contacten en Chat in de
+  app. Onder de agendaknop zit een nieuw rasterknopje dat de apps van dat
+  account uitklapt.
+- Links naar deze Google-apps (bijvoorbeeld een Documenten-link in een e-mail)
+  openen nu in de app zelf, in het juiste onderdeel, in plaats van in de
+  externe browser. De nieuwe onderdelen sturen geen meldingen.
+
+### Added
+- **Google apps per account** — next to Mail and Calendar, each account can now
+  open Drive, Docs, Sheets, Slides, Keep, Contacts and Chat inside the app. A
+  new grid button under the calendar button expands that account's apps.
+- Links to these Google apps (e.g. a Docs link in an email) now open inside the
+  app, in the right section, instead of in the external browser. The new
+  sections don't send notifications.
+
 ## [0.2.0] — 2026-07-08
 
 ### Added

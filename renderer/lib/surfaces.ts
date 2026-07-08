@@ -1,0 +1,117 @@
+// Single source of truth for the Google surfaces the app hosts, shared by the
+// Electron main process, the preloads and the sidebar renderer. It lives under
+// renderer/ because Next.js cannot compile imports from outside its root,
+// while esbuild (main bundle) and vitest import from anywhere. Keep this
+// module pure data — no Electron or DOM imports.
+
+export const SURFACES = [
+  'mail',
+  'calendar',
+  'drive',
+  'docs',
+  'sheets',
+  'slides',
+  'keep',
+  'contacts',
+  'chat',
+] as const;
+
+export type Surface = (typeof SURFACES)[number];
+
+export interface SurfaceConfig {
+  label: string;
+  // Host the surface lives on; navigations/popups to it stay in-app.
+  host: string;
+  // First path segment when the host is shared between surfaces
+  // (docs.google.com serves Docs, Sheets and Slides).
+  path?: string;
+  url(index: number): string;
+  // Only calendar needs background timers to keep firing (reminder timing).
+  backgroundThrottling: boolean;
+}
+
+export const SURFACE_CONFIG: Record<Surface, SurfaceConfig> = {
+  mail: {
+    label: 'Mail',
+    host: 'mail.google.com',
+    url: (i) => `https://mail.google.com/mail/u/${i}/`,
+    backgroundThrottling: true,
+  },
+  calendar: {
+    label: 'Calendar',
+    host: 'calendar.google.com',
+    url: (i) => `https://calendar.google.com/calendar/u/${i}/r`,
+    backgroundThrottling: false,
+  },
+  drive: {
+    label: 'Drive',
+    host: 'drive.google.com',
+    url: (i) => `https://drive.google.com/drive/u/${i}/my-drive`,
+    backgroundThrottling: true,
+  },
+  docs: {
+    label: 'Docs',
+    host: 'docs.google.com',
+    path: 'document',
+    url: (i) => `https://docs.google.com/document/u/${i}/`,
+    backgroundThrottling: true,
+  },
+  sheets: {
+    label: 'Sheets',
+    host: 'docs.google.com',
+    path: 'spreadsheets',
+    url: (i) => `https://docs.google.com/spreadsheets/u/${i}/`,
+    backgroundThrottling: true,
+  },
+  slides: {
+    label: 'Slides',
+    host: 'docs.google.com',
+    path: 'presentation',
+    url: (i) => `https://docs.google.com/presentation/u/${i}/`,
+    backgroundThrottling: true,
+  },
+  keep: {
+    label: 'Keep',
+    host: 'keep.google.com',
+    url: (i) => `https://keep.google.com/u/${i}/`,
+    backgroundThrottling: true,
+  },
+  contacts: {
+    label: 'Contacts',
+    host: 'contacts.google.com',
+    url: (i) => `https://contacts.google.com/u/${i}/`,
+    backgroundThrottling: true,
+  },
+  chat: {
+    label: 'Chat',
+    host: 'chat.google.com',
+    url: (i) => `https://chat.google.com/u/${i}/`,
+    backgroundThrottling: true,
+  },
+};
+
+// The waffle flyout's contents: every surface except the pinned mail avatar
+// and calendar button.
+export const APP_SURFACES: readonly Surface[] = SURFACES.filter(
+  (s) => s !== 'mail' && s !== 'calendar',
+);
+
+// Which hosted surface owns a URL, so an in-app popup (e.g. a Docs link in an
+// email) opens in that surface's view instead of clobbering the view it was
+// clicked in. Null for anything the app doesn't host as a surface.
+export function surfaceForUrl(url: string): Surface | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const firstSegment = parsed.pathname.split('/').filter(Boolean)[0] ?? '';
+  for (const s of SURFACES) {
+    const cfg = SURFACE_CONFIG[s];
+    if (cfg.host !== host) continue;
+    if (cfg.path === undefined || cfg.path === firstSegment) return s;
+  }
+  return null;
+}

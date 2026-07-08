@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from './ipc';
+import type { Surface } from '../renderer/lib/surfaces';
 
 interface Profile {
   index: number;
@@ -10,7 +11,6 @@ interface Profile {
   order?: number;
   label?: string;
 }
-type Surface = 'mail' | 'calendar';
 
 contextBridge.exposeInMainWorld('desktop', {
   onProfilesChanged: (cb: (profiles: Profile[]) => void): void => {

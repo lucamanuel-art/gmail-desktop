@@ -93,6 +93,15 @@ describe('notificationsAllowed — surface', () => {
     expect(notificationsAllowed(p, 'a@x.com', at(12), 'calendar')).toBe(true);
   });
 
+  it('never allows the Google app surfaces (v1: no notifications)', () => {
+    const p = base();
+    // Even a fully opted-in account gets no Drive/Chat/etc. notifications.
+    p.accounts['a@x.com'] = { notify: true, calendarNotify: true };
+    for (const surface of ['drive', 'docs', 'sheets', 'slides', 'keep', 'contacts', 'chat'] as const) {
+      expect(notificationsAllowed(p, 'a@x.com', at(12), surface)).toBe(false);
+    }
+  });
+
   it('DND and quiet hours gate calendar too', () => {
     const dnd = base();
     dnd.notifications.dnd = true;

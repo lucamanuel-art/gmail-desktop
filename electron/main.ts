@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
+import { SURFACES } from '../renderer/lib/surfaces';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
 import { PrefsStore } from './prefs-store';
@@ -171,8 +172,7 @@ function removeAccount(email: string): void {
   profiles.splice(profiles.indexOf(profile), 1);
   seenEmails.delete(email);
   delete unreadCounts[idx];
-  manager?.discardView(idx, 'mail');
-  manager?.discardView(idx, 'calendar');
+  for (const surface of SURFACES) manager?.discardView(idx, surface);
   pushProfiles();
   pushUnread();
   applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
@@ -181,6 +181,9 @@ function removeAccount(email: string): void {
 
 function switchSurface(index: number, surface: Surface): void {
   manager?.show(index, surface);
+  // A first switch to an app surface just created its view; gate it right away
+  // (the app surfaces never notify in v1) instead of on the next 60s tick.
+  refreshNotifyAllowed();
 }
 
 function startDetection(): void {
@@ -274,8 +277,9 @@ function refreshNotifyAllowed(): void {
     refreshTray();
   }
   for (const profile of profiles) {
-    manager?.pushNotifyAllowed(profile.index, 'mail', notificationsAllowed(p, profile.email, now, 'mail'));
-    manager?.pushNotifyAllowed(profile.index, 'calendar', notificationsAllowed(p, profile.email, now, 'calendar'));
+    for (const surface of SURFACES) {
+      manager?.pushNotifyAllowed(profile.index, surface, notificationsAllowed(p, profile.email, now, surface));
+    }
   }
 }
 function startNotifyTimer(): void {
