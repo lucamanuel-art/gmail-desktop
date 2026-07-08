@@ -51,6 +51,29 @@ describe('PrefsStore', () => {
     store.setNotifications({ dnd: true, quietHours: { enabled: true, start: '22:00', end: '07:00' } });
     expect(new PrefsStore(file).getAll().notifications.dnd).toBe(true);
   });
+
+  it('defaults dndUntil to undefined when absent', () => {
+    const store = new PrefsStore(file);
+    store.setNotifications({ dnd: false, quietHours: { enabled: false, start: '18:00', end: '08:00' } });
+    expect(new PrefsStore(file).getAll().notifications.dndUntil).toBeUndefined();
+  });
+
+  it('persists and re-reads a numeric dndUntil', () => {
+    const store = new PrefsStore(file);
+    store.setNotifications({ dnd: false, dndUntil: 1893456000000, quietHours: { enabled: false, start: '18:00', end: '08:00' } });
+    expect(new PrefsStore(file).getAll().notifications.dndUntil).toBe(1893456000000);
+  });
+
+  it('ignores a non-numeric dndUntil on disk', () => {
+    const store = new PrefsStore(file);
+    store.setTheme('dark'); // create the file
+    require('node:fs').writeFileSync(
+      file,
+      JSON.stringify({ notifications: { dnd: false, dndUntil: 'soon', quietHours: { enabled: false, start: '18:00', end: '08:00' } } }),
+      'utf8',
+    );
+    expect(new PrefsStore(file).getAll().notifications.dndUntil).toBeUndefined();
+  });
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));

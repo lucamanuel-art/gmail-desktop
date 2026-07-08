@@ -15,6 +15,7 @@ export interface QuietHours {
 }
 export interface NotificationPrefs {
   dnd: boolean;
+  dndUntil?: number; // epoch ms; notifications stay muted while Date.now() < dndUntil
   quietHours: QuietHours;
 }
 export interface WindowPrefs {
@@ -63,6 +64,7 @@ export class PrefsStore {
         notificationOpen: raw.notificationOpen === 'window' ? 'window' : 'app',
         notifications: {
           dnd: typeof raw.notifications?.dnd === 'boolean' ? raw.notifications.dnd : false,
+          dndUntil: typeof raw.notifications?.dndUntil === 'number' ? raw.notifications.dndUntil : undefined,
           quietHours: { ...DEFAULT_PREFS.notifications.quietHours, ...(raw.notifications?.quietHours ?? {}) },
         },
         accounts: raw.accounts && typeof raw.accounts === 'object' && !Array.isArray(raw.accounts)

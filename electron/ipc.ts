@@ -18,6 +18,7 @@ export const IPC = {
   SET_ACCOUNT_PREF: 'prefs:account', // send({email, label?, notify?})
   SET_ACCOUNT_ORDER: 'prefs:order', // send({emails: string[]})
   SET_NOTIFICATIONS: 'prefs:notifications', // send({dnd, quietHours})
+  SET_SNOOZE: 'prefs:snooze', // send(minutes: number | null) — >0 timed snooze, null = mute indefinitely, 0 = clear
   SET_THEME: 'prefs:theme', // send('system'|'light'|'dark')
   SET_NOTIFICATION_OPEN: 'prefs:notification-open', // send('app'|'window')
   // main -> renderer (sidebar)
@@ -25,6 +26,7 @@ export const IPC = {
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
   UPDATE_STATUS: 'update:status', // { state, currentVersion, version?, percent?, message? }
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
+  SETTINGS_FORCE_OPEN: 'settings:force-open', // main -> renderer: open the settings panel (e.g. tray "Check for updates")
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
   NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(boolean)
 } as const;
