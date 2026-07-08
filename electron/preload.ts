@@ -68,6 +68,25 @@ export function isEditableTarget(
   return tag === 'input' || tag === 'textarea' || el.isContentEditable === true;
 }
 
+// The main process denies window.open calls it handles itself (in-app
+// navigation, external browser, or the duplicate popup right after a handled
+// notification click). A denied window.open returns null, which Gmail reads as
+// a popup blocker and alerts. Substitute a harmless window-like stub — the
+// open WAS handled, just not as a new renderer window.
+export function wrapWindowOpen(original: typeof window.open): typeof window.open {
+  return function (...args: Parameters<typeof window.open>) {
+    const w = original(...args);
+    if (w) return w;
+    return {
+      closed: true,
+      close() {},
+      focus() {},
+      blur() {},
+      postMessage() {},
+    } as unknown as Window;
+  };
+}
+
 // Electron-only wiring. Guarded so the module is importable under plain Node (tests).
 if (typeof document !== 'undefined') {
   // Lazy require avoids bundling issues and keeps the top of the module Node-safe.
@@ -77,6 +96,9 @@ if (typeof document !== 'undefined') {
   ipcRenderer.on(IPC.NOTIFY_ALLOWED, (_e: unknown, allowed: boolean) => {
     notifyAllowed = allowed;
   });
+
+  // Install before page scripts run so Gmail never sees a null window.open.
+  window.open = wrapWindowOpen(window.open.bind(window));
 
   const report = () =>
     computeAndReport(document, (channel, count) => ipcRenderer.send(channel, count));
