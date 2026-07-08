@@ -30,6 +30,11 @@ to [Semantic Versioning](https://semver.org/).
 - The app no longer crashes ("Cannot read properties of undefined") after a
   Google page inside a view closes itself, e.g. Gmail's pop-out compose after
   sending. Dead views are now cleaned up.
+- Fixed a crash on quit ("Object has been destroyed") when views were torn down
+  after the main window had already closed.
+- Clicking a notification no longer triggers Gmail's "pop-up blocked" warning
+  (the app opens the message itself and hands Gmail's follow-up popup a
+  harmless stub instead of a blocked-looking null window).
 
 ## [0.1.7] — 2026-07-07
 

@@ -87,9 +87,16 @@ export class ProfileViewManager {
     // like refreshNotifyAllowed don't crash on a destroyed webContents.
     view.webContents.once('destroyed', () => {
       if (this.views.get(k) !== view) return;
-      this.win.contentView.removeChildView(view);
       this.views.delete(k);
       if (this.activeKey === k) this.activeKey = null;
+      // On app quit the window is torn down before its views; touching
+      // contentView then throws "Object has been destroyed".
+      if (this.win.isDestroyed()) return;
+      try {
+        this.win.contentView.removeChildView(view);
+      } catch {
+        // View/window already gone during teardown — nothing to detach.
+      }
     });
     this.win.contentView.addChildView(view);
     view.setVisible(false);
