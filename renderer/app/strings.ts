@@ -39,6 +39,13 @@ export interface UiStrings {
   updError: (message: string) => string;
   updDev: string;
 
+  sectionWhatsNew: string;
+  changelogVersionPrefix: string; // e.g. "Version" — shown before the number in each entry
+  showOlder: string;
+  hideOlder: string;
+  changelogEmpty: string;
+  changelogCategory: (heading: string) => string; // localizes a known "### Category" label
+
   sectionAccounts: string;
   mailToggle: string;
   mailToggleTitle: string;
@@ -58,6 +65,47 @@ export interface UiStrings {
   settingsTooltip: string;
   calendarTooltipSuffix: string;
 }
+
+// Maps a known changelog category heading (English or Dutch, any case) to a
+// canonical key, so both language variants can relabel it. Unknown headings
+// (or the implicit empty heading) return null and render without a label.
+function categoryKey(heading: string): 'added' | 'fixed' | 'changed' | 'removed' | 'security' | null {
+  switch (heading.trim().toLowerCase()) {
+    case 'added':
+    case 'toegevoegd':
+      return 'added';
+    case 'fixed':
+    case 'opgelost':
+      return 'fixed';
+    case 'changed':
+    case 'gewijzigd':
+      return 'changed';
+    case 'removed':
+    case 'verwijderd':
+      return 'removed';
+    case 'security':
+    case 'beveiliging':
+      return 'security';
+    default:
+      return null;
+  }
+}
+
+const CATEGORY_NORMAL: Record<string, string> = {
+  added: 'New',
+  fixed: 'Fixed',
+  changed: 'Changed',
+  removed: 'Removed',
+  security: 'Security',
+};
+
+const CATEGORY_RENE: Record<string, string> = {
+  added: 'Nieuw',
+  fixed: 'Gemaakt',
+  changed: 'Anders',
+  removed: 'Weg',
+  security: 'Veilig',
+};
 
 export const STRINGS_NORMAL: UiStrings = {
   settingsTitle: 'Settings',
@@ -95,6 +143,16 @@ export const STRINGS_NORMAL: UiStrings = {
   updDownloaded: 'Update downloaded — restarting to install…',
   updError: (message) => `Couldn't check for updates: ${message}`,
   updDev: 'Updates are only available in the installed app.',
+
+  sectionWhatsNew: "What's new",
+  changelogVersionPrefix: 'Version',
+  showOlder: 'Show older versions',
+  hideOlder: 'Hide older versions',
+  changelogEmpty: 'No release notes available.',
+  changelogCategory: (heading) => {
+    const key = categoryKey(heading);
+    return key ? CATEGORY_NORMAL[key] : '';
+  },
 
   sectionAccounts: 'Accounts',
   mailToggle: 'Mail',
@@ -155,6 +213,16 @@ export const STRINGS_RENE: UiStrings = {
   updDownloaded: 'Het is er! De app gaat uit en aan…',
   updError: (message) => `Het lukt nu niet: ${message}`,
   updDev: 'Dit kan alleen in de echte app.',
+
+  sectionWhatsNew: 'Wat is er nieuw?',
+  changelogVersionPrefix: 'Versie',
+  showOlder: 'Laat oude dingen zien',
+  hideOlder: 'Verberg oude dingen',
+  changelogEmpty: 'Er is nog niks om te laten zien.',
+  changelogCategory: (heading) => {
+    const key = categoryKey(heading);
+    return key ? CATEGORY_RENE[key] : '';
+  },
 
   sectionAccounts: 'Wie doet mee?',
   mailToggle: 'Post',

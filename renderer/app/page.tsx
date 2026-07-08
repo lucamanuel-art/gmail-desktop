@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { SettingsPanel } from './SettingsPanel';
 import { CALENDAR_ICON_DATA_URI } from './calendar-icon-data';
 import { getStrings } from './strings';
+import type { ChangelogVersion } from './changelog-types';
 
 export interface Profile {
   index: number;
@@ -74,6 +75,7 @@ interface DesktopBridge {
   setTheme(theme: 'system' | 'light' | 'dark'): void;
   setNotificationOpen(v: 'app' | 'window'): void;
   setReneMode(v: boolean): void;
+  getChangelog(): Promise<ChangelogVersion[]>;
 }
 
 declare global {

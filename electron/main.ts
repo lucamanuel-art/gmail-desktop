@@ -1,7 +1,9 @@
 import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen, dialog } from 'electron';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
+import { parseChangelog, type ChangelogVersion } from './changelog';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
@@ -22,6 +24,17 @@ import { updateCheckPopup } from './update-popup';
 import { RENE_ZOOM_FACTOR, RENE_ZOOM_LEVEL } from './rene';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
+const CHANGELOG_PATH = join(__dirname, '..', 'CHANGELOG.md');
+
+// Read + parse the shipped CHANGELOG.md on demand. Returns [] if it's missing
+// or unreadable so the "What's new" section simply hides rather than erroring.
+function loadChangelog(): ChangelogVersion[] {
+  try {
+    return parseChangelog(readFileSync(CHANGELOG_PATH, 'utf8'));
+  } catch {
+    return [];
+  }
+}
 const PRELOAD_PATH = join(__dirname, 'preload.js');
 const SIDEBAR_PRELOAD_PATH = join(__dirname, 'sidebar-preload.js');
 // Bundled app icon. Resolves to <project>/assets/icon.png in dev and to
@@ -621,6 +634,7 @@ function registerIpc(): void {
     applyReneZoom();
     pushPrefs();
   });
+  ipcMain.handle(IPC.CHANGELOG_GET, () => loadChangelog());
 }
 
 // Single-instance: closing the window keeps the process alive in the tray, so a
