@@ -1,9 +1,11 @@
+import { SURFACES, SURFACE_CONFIG } from '../renderer/lib/surfaces';
+
 export function mailUrl(index: number): string {
-  return `https://mail.google.com/mail/u/${index}/`;
+  return SURFACE_CONFIG.mail.url(index);
 }
 
 export function calendarUrl(index: number): string {
-  return `https://calendar.google.com/calendar/u/${index}/r`;
+  return SURFACE_CONFIG.calendar.url(index);
 }
 
 // Gmail's focused single-message reading window lives under a /popout path.
@@ -17,13 +19,13 @@ export function isPopoutUrl(url: string): boolean {
   }
 }
 
-// Hosts served inside the app windows themselves: Gmail, Calendar and the
-// Google auth flow. Navigations and popups to these stay in-app; everything
-// else (links clicked inside an email, including Google's www.google.com/url
-// redirect wrapper) opens in the user's default browser instead.
+// Hosts served inside the app windows themselves: every hosted surface
+// (Gmail, Calendar, Drive, Docs, …) plus the Google auth flow. Navigations and
+// popups to these stay in-app; everything else (links clicked inside an email,
+// including Google's www.google.com/url redirect wrapper) opens in the user's
+// default browser instead.
 const IN_APP_HOSTS = new Set([
-  'mail.google.com',
-  'calendar.google.com',
+  ...SURFACES.map((s) => SURFACE_CONFIG[s].host),
   'accounts.google.com',
 ]);
 

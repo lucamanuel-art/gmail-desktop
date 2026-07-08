@@ -35,10 +35,18 @@ describe('isInAppUrl', () => {
     expect(isInAppUrl('https://calendar.google.com/calendar/u/0/r')).toBe(true);
     expect(isInAppUrl('https://accounts.google.com/AddSession')).toBe(true);
   });
+  it('keeps every Google app surface host in-app', () => {
+    expect(isInAppUrl('https://drive.google.com/drive/u/0/my-drive')).toBe(true);
+    expect(isInAppUrl('https://docs.google.com/document/d/abc')).toBe(true);
+    expect(isInAppUrl('https://docs.google.com/spreadsheets/d/abc')).toBe(true);
+    expect(isInAppUrl('https://keep.google.com/u/0/')).toBe(true);
+    expect(isInAppUrl('https://contacts.google.com/u/0/')).toBe(true);
+    expect(isInAppUrl('https://chat.google.com/u/0/')).toBe(true);
+  });
   it('treats email links as external, including the redirect wrapper', () => {
     expect(isInAppUrl('https://www.google.com/url?q=https://example.com')).toBe(false);
     expect(isInAppUrl('https://example.com/article')).toBe(false);
-    expect(isInAppUrl('https://docs.google.com/document/d/abc')).toBe(false);
+    expect(isInAppUrl('https://meet.google.com/abc-defg-hij')).toBe(false);
   });
   it('returns false for malformed urls', () => {
     expect(isInAppUrl('not a url')).toBe(false);
