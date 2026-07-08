@@ -26,6 +26,7 @@ export const IPC = {
   UNREAD_CHANGED: 'unread:changed', // Record<index, number>
   UPDATE_STATUS: 'update:status', // { state, currentVersion, version?, percent?, message? }
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
+  SETTINGS_FORCE_OPEN: 'settings:force-open', // main -> renderer: open the settings panel (e.g. tray "Check for updates")
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
   NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(boolean)
 } as const;

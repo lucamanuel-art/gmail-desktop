@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen } from 'electron';
+import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen, dialog } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
@@ -18,6 +18,7 @@ import { resolveShortcut, type KeyInput } from './shortcuts';
 import { openCompose, openFullThreadWindow } from './compose-window';
 import { sortByOrder } from './account-order';
 import { notificationsAllowed } from './notification-policy';
+import { updateCheckPopup } from './update-popup';
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const PRELOAD_PATH = join(__dirname, 'preload.js');
@@ -37,6 +38,7 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let settingsPanelOpen = false;
 let updateRequested = false; // user pressed "Update now" → auto-install once downloaded
+let pendingTrayUpdateCheck = false; // a check started from the tray → announce the result in a popup
 let lastUpdateStatus: Record<string, unknown> = { state: 'idle' };
 
 const SESSION_PARTITION = 'persist:google';
@@ -396,6 +398,51 @@ function sendUpdate(status: Record<string, unknown>): void {
   lastUpdateStatus = { ...status, currentVersion: app.getVersion() };
   mainWindow?.webContents.send(IPC.UPDATE_STATUS, lastUpdateStatus);
   refreshTray(); // keep the tray's update label in sync with each status transition
+  maybeShowTrayUpdatePopup();
+}
+
+// Bring the window forward and open the Settings panel (where the update section
+// lives). Used by the tray "Check for updates" item.
+function openSettingsPanel(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  settingsPanelOpen = true;
+  manager?.hideAll();
+  mainWindow.webContents.send(IPC.SETTINGS_FORCE_OPEN);
+}
+
+// Tray "Check for updates": open settings so the user sees the update section,
+// then run the check and announce the terminal result in a small popup.
+function checkForUpdateFromTray(): void {
+  openSettingsPanel();
+  pendingTrayUpdateCheck = true;
+  checkForUpdate();
+}
+
+function maybeShowTrayUpdatePopup(): void {
+  if (!pendingTrayUpdateCheck) return;
+  const popup = updateCheckPopup(lastUpdateStatus as { state: string });
+  if (!popup) return; // still checking/downloading — wait for a terminal result
+  pendingTrayUpdateCheck = false;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  void dialog
+    .showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Gmail Desktop',
+      message: popup.message,
+      detail: popup.detail,
+      buttons: popup.buttons,
+      defaultId: 0,
+      cancelId: popup.buttons.length - 1,
+      noLink: true,
+    })
+    .then((res) => {
+      if (popup.downloadButtonIndex != null && res.response === popup.downloadButtonIndex) {
+        downloadUpdate();
+      }
+    });
 }
 
 // Update / autostart / snooze actions are factored out so both the IPC handlers
@@ -449,7 +496,7 @@ function getTrayState(): TrayState {
     },
     isPackaged: app.isPackaged,
     updateStatus: lastUpdateStatus as unknown as TrayUpdateStatus,
-    onCheckUpdate: checkForUpdate,
+    onCheckUpdate: checkForUpdateFromTray,
     onDownloadUpdate: downloadUpdate,
     onInstallUpdate: installUpdate,
     autoStart: p?.autoStart ?? false,

@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('desktop', {
   onSettingsForceClose: (cb: () => void): void => {
     ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());
   },
+  onSettingsForceOpen: (cb: () => void): void => {
+    ipcRenderer.on(IPC.SETTINGS_FORCE_OPEN, () => cb());
+  },
   setAutoStart: (v: boolean): void => ipcRenderer.send(IPC.SET_AUTO_START, v),
   onPrefsChanged: (cb: (prefs: unknown) => void): void => {
     ipcRenderer.on(IPC.PREFS_CHANGED, (_e, p) => cb(p));

@@ -59,6 +59,7 @@ interface DesktopBridge {
   removeAccount(email: string): void;
   toggleSettings(open: boolean): void;
   onSettingsForceClose(cb: () => void): void;
+  onSettingsForceOpen(cb: () => void): void;
   checkForUpdate(): void;
   downloadUpdate(): void;
   installUpdate(): void;
@@ -153,6 +154,7 @@ export default function Sidebar() {
     });
     bridge.onUnreadChanged(setUnread);
     bridge.onSettingsForceClose(() => setSettingsOpen(false));
+    bridge.onSettingsForceOpen(() => setSettingsOpen(true));
     bridge.onUpdateStatus(setUpdate);
     bridge.onPrefsChanged((p) => setPrefs(p as Prefs));
   }, []);
