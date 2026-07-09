@@ -4,8 +4,12 @@ import {
   APP_SURFACES,
   SURFACE_CONFIG,
   surfaceForUrl,
+  surfacesForRef,
   type Surface,
 } from '../renderer/lib/surfaces';
+import type { AccountRef } from '../renderer/lib/account-ref';
+
+const u = (index: number): AccountRef => ({ kind: 'authuser', index });
 
 describe('SURFACE_CONFIG', () => {
   it('covers every surface with a label, host and url', () => {
@@ -13,20 +17,20 @@ describe('SURFACE_CONFIG', () => {
       const cfg = SURFACE_CONFIG[s];
       expect(cfg.label.length).toBeGreaterThan(0);
       expect(cfg.host).toMatch(/\.google\.com$/);
-      expect(cfg.url(0)).toContain(cfg.host);
+      expect(cfg.url(u(0))).toContain(cfg.host);
     }
   });
 
   it('embeds the account index in every url', () => {
     for (const s of SURFACES) {
-      expect(SURFACE_CONFIG[s].url(0)).toContain('/u/0/');
-      expect(SURFACE_CONFIG[s].url(3)).toContain('/u/3/');
+      expect(SURFACE_CONFIG[s].url(u(0))).toContain('/u/0/');
+      expect(SURFACE_CONFIG[s].url(u(3))).toContain('/u/3/');
     }
   });
 
   it('keeps the known mail/calendar urls stable', () => {
-    expect(SURFACE_CONFIG.mail.url(2)).toBe('https://mail.google.com/mail/u/2/');
-    expect(SURFACE_CONFIG.calendar.url(1)).toBe('https://calendar.google.com/calendar/u/1/r');
+    expect(SURFACE_CONFIG.mail.url(u(2))).toBe('https://mail.google.com/mail/u/2/');
+    expect(SURFACE_CONFIG.calendar.url(u(1))).toBe('https://calendar.google.com/calendar/u/1/r');
   });
 
   it('only disables background throttling for calendar (reminder timing)', () => {
@@ -43,10 +47,64 @@ describe('SURFACE_CONFIG', () => {
   });
 });
 
+describe('surface urls by ref', () => {
+  it('builds authuser mail url from index', () => {
+    expect(SURFACE_CONFIG.mail.url({ kind: 'authuser', index: 1 })).toBe(
+      'https://mail.google.com/mail/u/1/',
+    );
+  });
+  it('builds delegated mail url from Google href', () => {
+    expect(
+      SURFACE_CONFIG.mail.url({
+        kind: 'delegated',
+        email: 't@x.com',
+        mailUrl: 'https://mail.google.com/mail/b/ID/',
+        calendarUrl: null,
+      }),
+    ).toBe('https://mail.google.com/mail/b/ID/');
+  });
+  it('builds delegated calendar url from the captured url', () => {
+    expect(
+      SURFACE_CONFIG.calendar.url({
+        kind: 'delegated',
+        email: 't@x.com',
+        mailUrl: 'https://m/',
+        calendarUrl: 'https://calendar.google.com/calendar/b/CID/r',
+      }),
+    ).toBe('https://calendar.google.com/calendar/b/CID/r');
+  });
+  it('throws if a non-mail/calendar surface is built for a delegated ref', () => {
+    expect(() =>
+      SURFACE_CONFIG.drive.url({ kind: 'delegated', email: 't@x.com', mailUrl: 'https://m/', calendarUrl: null }),
+    ).toThrow();
+  });
+});
+
+describe('surfacesForRef', () => {
+  it('offers all surfaces for an authuser ref', () => {
+    expect(surfacesForRef(u(0))).toEqual([...SURFACES]);
+  });
+  it('offers only mail for a delegated ref without calendar', () => {
+    expect(
+      surfacesForRef({ kind: 'delegated', email: 't@x.com', mailUrl: 'https://m/', calendarUrl: null }),
+    ).toEqual(['mail']);
+  });
+  it('offers mail+calendar for a delegated ref with a calendar', () => {
+    expect(
+      surfacesForRef({
+        kind: 'delegated',
+        email: 't@x.com',
+        mailUrl: 'https://m/',
+        calendarUrl: 'https://c/',
+      }),
+    ).toEqual(['mail', 'calendar']);
+  });
+});
+
 describe('surfaceForUrl', () => {
   it('maps every surface url back to its surface', () => {
     for (const s of SURFACES) {
-      expect(surfaceForUrl(SURFACE_CONFIG[s].url(1))).toBe(s as Surface);
+      expect(surfaceForUrl(SURFACE_CONFIG[s].url(u(1)))).toBe(s as Surface);
     }
   });
 

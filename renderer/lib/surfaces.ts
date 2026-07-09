@@ -4,6 +4,8 @@
 // while esbuild (main bundle) and vitest import from anywhere. Keep this
 // module pure data — no Electron or DOM imports.
 
+import type { AccountRef } from './account-ref';
+
 export const SURFACES = [
   'mail',
   'calendar',
@@ -25,70 +27,97 @@ export interface SurfaceConfig {
   // First path segment when the host is shared between surfaces
   // (docs.google.com serves Docs, Sheets and Slides).
   path?: string;
-  url(index: number): string;
+  // Build the surface URL for an account. Authuser accounts derive it from
+  // their /u/<index>/ slot; delegated mailboxes carry Google's own captured
+  // URL (mail/calendar only — other surfaces are not offered for delegates and
+  // throw if asked, guarded by surfacesForRef).
+  url(ref: AccountRef): string;
   // Only calendar needs background timers to keep firing (reminder timing).
   backgroundThrottling: boolean;
+}
+
+// A surface that only exists for the user's own accounts: reject delegated refs
+// loudly rather than emit a wrong URL. surfacesForRef never offers these for a
+// delegated mailbox, so this only fires on a programming error.
+function ownedIndex(ref: AccountRef, surface: string): number {
+  if (ref.kind !== 'authuser') {
+    throw new Error(`surface "${surface}" is not available for delegated mailboxes`);
+  }
+  return ref.index;
 }
 
 export const SURFACE_CONFIG: Record<Surface, SurfaceConfig> = {
   mail: {
     label: 'Mail',
     host: 'mail.google.com',
-    url: (i) => `https://mail.google.com/mail/u/${i}/`,
+    // Delegated mailboxes use Google's own captured href, adopted verbatim.
+    url: (ref) =>
+      ref.kind === 'delegated' ? ref.mailUrl : `https://mail.google.com/mail/u/${ref.index}/`,
     backgroundThrottling: true,
   },
   calendar: {
     label: 'Calendar',
     host: 'calendar.google.com',
-    url: (i) => `https://calendar.google.com/calendar/u/${i}/r`,
+    // Delegated calendar URL is the captured one (only present when reachable).
+    url: (ref) =>
+      ref.kind === 'delegated'
+        ? ref.calendarUrl!
+        : `https://calendar.google.com/calendar/u/${ref.index}/r`,
     backgroundThrottling: false,
   },
   drive: {
     label: 'Drive',
     host: 'drive.google.com',
-    url: (i) => `https://drive.google.com/drive/u/${i}/my-drive`,
+    url: (ref) => `https://drive.google.com/drive/u/${ownedIndex(ref, 'drive')}/my-drive`,
     backgroundThrottling: true,
   },
   docs: {
     label: 'Docs',
     host: 'docs.google.com',
     path: 'document',
-    url: (i) => `https://docs.google.com/document/u/${i}/`,
+    url: (ref) => `https://docs.google.com/document/u/${ownedIndex(ref, 'docs')}/`,
     backgroundThrottling: true,
   },
   sheets: {
     label: 'Sheets',
     host: 'docs.google.com',
     path: 'spreadsheets',
-    url: (i) => `https://docs.google.com/spreadsheets/u/${i}/`,
+    url: (ref) => `https://docs.google.com/spreadsheets/u/${ownedIndex(ref, 'sheets')}/`,
     backgroundThrottling: true,
   },
   slides: {
     label: 'Slides',
     host: 'docs.google.com',
     path: 'presentation',
-    url: (i) => `https://docs.google.com/presentation/u/${i}/`,
+    url: (ref) => `https://docs.google.com/presentation/u/${ownedIndex(ref, 'slides')}/`,
     backgroundThrottling: true,
   },
   keep: {
     label: 'Keep',
     host: 'keep.google.com',
-    url: (i) => `https://keep.google.com/u/${i}/`,
+    url: (ref) => `https://keep.google.com/u/${ownedIndex(ref, 'keep')}/`,
     backgroundThrottling: true,
   },
   contacts: {
     label: 'Contacts',
     host: 'contacts.google.com',
-    url: (i) => `https://contacts.google.com/u/${i}/`,
+    url: (ref) => `https://contacts.google.com/u/${ownedIndex(ref, 'contacts')}/`,
     backgroundThrottling: true,
   },
   chat: {
     label: 'Chat',
     host: 'chat.google.com',
-    url: (i) => `https://chat.google.com/u/${i}/`,
+    url: (ref) => `https://chat.google.com/u/${ownedIndex(ref, 'chat')}/`,
     backgroundThrottling: true,
   },
 };
+
+// Which surfaces an account offers: all of them for an authuser account; mail
+// (and calendar only when reachable) for a delegated mailbox.
+export function surfacesForRef(ref: AccountRef): Surface[] {
+  if (ref.kind === 'authuser') return [...SURFACES];
+  return ref.calendarUrl ? ['mail', 'calendar'] : ['mail'];
+}
 
 // The waffle flyout's contents: every surface except the pinned mail avatar
 // and calendar button.
