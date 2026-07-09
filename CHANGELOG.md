@@ -3,7 +3,7 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
-## [0.2.4] — 2026-07-09
+## [0.2.3] — 2026-07-09
 
 ### Toegevoegd
 - **Badge-teller per account aan/uit.** In Instellingen → Accounts heeft elk

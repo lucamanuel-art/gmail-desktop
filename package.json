@@ -1,6 +1,6 @@
 {
   "name": "gmail-desktop",
-  "version": "0.2.4",
+  "version": "0.2.3",
   "private": true,
   "description": "Cross-platform desktop wrapper for Gmail",
   "author": "Luca Manuel <luca.manuel@abovomaxlead.nl>",
