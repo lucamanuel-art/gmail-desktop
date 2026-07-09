@@ -281,7 +281,10 @@ export default function Sidebar() {
     <div className="flex h-screen w-full bg-neutral-100 text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
       <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 py-4">
         {/* Scrollable so an expanded waffle never pushes settings off-screen. */}
-        <div className="flex w-full flex-col items-center gap-2 overflow-y-auto [scrollbar-width:none]">
+        {/* px-1 py-1.5: the scroll container clips overflow on both axes, so
+            give the first/last items room for their -top-1 unread badge and
+            corner delegated marker (otherwise they're cut off at the edge). */}
+        <div className="flex w-full flex-col items-center gap-2 overflow-y-auto px-1 py-1.5 [scrollbar-width:none]">
         {profiles.map((p) => {
           const mailActive = active?.key === p.key && active.surface === 'mail';
           const calActive = active?.key === p.key && active.surface === 'calendar';
