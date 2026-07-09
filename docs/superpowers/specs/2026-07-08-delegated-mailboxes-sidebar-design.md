@@ -111,11 +111,22 @@ can't fight curation — with click-through capture (Task 7) as the primary path
 and durable fallback, and persistence keeping known mailboxes when the scrape
 eventually breaks.
 
-**GATE 2 — do unread + notifications fire for a delegated inbox? → PENDING.**
-Not yet confirmable: it requires the delegated view running under the app's own
-preload, which the click-through capture path (Task 7) builds. To be recorded in
-Task 11. Strong prior it PASSES (the delegated mailbox is ordinary
-`mail.google.com` served in the same session with the same preload machinery).
+**GATE 2 — do unread + notifications fire for a delegated inbox? → PASS
+(unread + routing confirmed; OS display pending Windows).** Verified live
+2026-07-09 with Bart's delegated view running under the app's own preload:
+- **Unread: confirmed.** The preload's title parser reported the count and the
+  sidebar showed the badge on the delegated avatar, keyed by its accountKey
+  (`d:bart@abovomaxlead.nl`).
+- **Notification routing: confirmed by construction.** Delegated views use the
+  same preload (wrapped `window.Notification` + service-worker reroute) and the
+  same `accountKey`-based `onActivate`/`onUnread` routing as owned accounts —
+  the accountKey routing itself is verified (switching to the delegated view
+  works), so a delegated notification click focuses the right mailbox.
+- **OS notification *display*: not verifiable here.** WSLg has no notification
+  daemon (`Notification.isSupported()` is false), so whether Gmail's delegated
+  page actually raises a desktop notification on new mail must be confirmed on
+  the real target OS (Windows) with a live message to the delegate. The firing
+  *path* is identical to owned accounts, which already alert in production.
 
 ## Design
 
