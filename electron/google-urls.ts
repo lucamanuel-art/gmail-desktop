@@ -52,6 +52,28 @@ export function isGoogleUrl(url: string): boolean {
   return host !== null && (host === 'google.com' || host.endsWith('.google.com'));
 }
 
+// Identity-provider hosts a Google Workspace sign-in can redirect the embedded
+// view to. When a domain federates Google sign-in to Microsoft Entra ID, the
+// login flow leaves google.com for login.microsoftonline.com (and friends)
+// mid-handshake. Such a navigation must stay in-app: externalising it via
+// shell.openExternal drops the federation form POST and re-issues it as a bare
+// GET, which Entra rejects with "AADSTS900561: The endpoint only accepts POST
+// requests. Received a GET request." — leaving the account impossible to add.
+const FEDERATED_LOGIN_HOSTS = new Set([
+  'login.microsoftonline.com',
+  'login.microsoft.com',
+  'login.windows.net',
+  'login.live.com',
+]);
+
+// True for a Microsoft Entra login host used during federated Workspace SSO, so
+// its top-frame navigation is kept in-app rather than bounced to the browser.
+export function isFederatedLoginUrl(url: string): boolean {
+  const host = hostOf(url);
+  if (host === null) return false;
+  return FEDERATED_LOGIN_HOSTS.has(host) || host.endsWith('.microsoftonline.com');
+}
+
 // Opens Google's "add another account" flow and lands back in Gmail once the
 // new session is signed in. Used by the sidebar "+" button: unlike a hidden
 // re-detect probe, this shows a real login page so a not-yet-signed-in account

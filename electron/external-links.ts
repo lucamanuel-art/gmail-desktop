@@ -1,5 +1,5 @@
 import { shell, type WebContents } from 'electron';
-import { isInAppUrl, isGoogleUrl, isPopoutUrl } from './google-urls';
+import { isInAppUrl, isGoogleUrl, isFederatedLoginUrl, isPopoutUrl } from './google-urls';
 
 // Routes links that don't belong to the in-app Gmail/Calendar/auth surfaces to
 // the user's default browser instead of opening them inside the mail view.
@@ -64,8 +64,13 @@ export function attachExternalLinkHandling(
     return { action: 'allow' };
   });
 
+  // Google-to-Google hops and federated-login redirects (e.g. Workspace SSO to
+  // Microsoft Entra) stay in-app so the sign-in POST survives; only genuinely
+  // off-flow navigation (a link clicked in an email) is externalised. Handing a
+  // federated-login POST to shell.openExternal would re-issue it as a GET and
+  // trip AADSTS900561 — see isFederatedLoginUrl.
   webContents.on('will-navigate', (event, url) => {
-    if (!isGoogleUrl(url)) {
+    if (!isGoogleUrl(url) && !isFederatedLoginUrl(url)) {
       event.preventDefault();
       void shell.openExternal(url);
     }

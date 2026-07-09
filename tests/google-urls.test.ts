@@ -5,6 +5,7 @@ import {
   addAccountUrl,
   isInAppUrl,
   isGoogleUrl,
+  isFederatedLoginUrl,
   isPopoutUrl,
 } from '../electron/google-urls';
 
@@ -66,5 +67,26 @@ describe('isGoogleUrl', () => {
   });
   it('returns false for malformed urls', () => {
     expect(isGoogleUrl('::::')).toBe(false);
+  });
+});
+
+describe('isFederatedLoginUrl', () => {
+  it('matches the Microsoft Entra login hosts a Workspace SSO redirect uses', () => {
+    expect(
+      isFederatedLoginUrl('https://login.microsoftonline.com/common/oauth2/authorize'),
+    ).toBe(true);
+    expect(isFederatedLoginUrl('https://login.microsoft.com/')).toBe(true);
+    expect(isFederatedLoginUrl('https://login.windows.net/')).toBe(true);
+    expect(isFederatedLoginUrl('https://login.live.com/')).toBe(true);
+    expect(isFederatedLoginUrl('https://device.login.microsoftonline.com/')).toBe(true);
+  });
+  it('does not match look-alike or off-Microsoft hosts', () => {
+    expect(isFederatedLoginUrl('https://login.microsoftonline.com.evil.com/')).toBe(false);
+    expect(isFederatedLoginUrl('https://evil-microsoftonline.com/')).toBe(false);
+    expect(isFederatedLoginUrl('https://mail.google.com/mail/u/0/')).toBe(false);
+    expect(isFederatedLoginUrl('https://example.com/')).toBe(false);
+  });
+  it('returns false for malformed urls', () => {
+    expect(isFederatedLoginUrl('nope')).toBe(false);
   });
 });
