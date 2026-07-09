@@ -453,7 +453,7 @@ export function SettingsPanel({
             const showImg = p.avatarUrl && !brokenAvatars[p.avatarUrl];
             return (
               <div
-                key={p.index}
+                key={p.email}
                 className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white dark:border-white/5 dark:bg-neutral-900 p-3.5"
               >
                 <div className="flex items-center gap-3">

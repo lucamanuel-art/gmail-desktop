@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
 import { parseChangelog, type ChangelogVersion } from './changelog';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
-import { SURFACES } from '../renderer/lib/surfaces';
+import { SURFACES, surfacesForRef } from '../renderer/lib/surfaces';
 import { accountKey, parseAccountKey, type AccountRef } from './account-ref';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
@@ -61,7 +61,7 @@ const SESSION_PARTITION = 'persist:google';
 
 const profiles: Profile[] = [];
 const seenEmails = new Set<string>();
-const unreadCounts: Record<number, number> = {};
+const unreadCounts: Record<string, number> = {}; // keyed by accountKey
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 let probingIndex: number | null = null;
 // Index of a *visible* probe (the "+ add account" flow) awaiting identity, vs
@@ -96,12 +96,22 @@ const idxOfKey = (key: string): number | null => {
   return parsed.kind === 'authuser' ? parsed.index : null;
 };
 
-// Decorate with per-account prefs and a renderer-facing `index` (derived from
-// the ref) so the sidebar renderer and IPC stay unchanged for now.
+// Decorate for the sidebar renderer: the stable `key` (accountKey) it routes by,
+// the `kind`, whether a calendar surface is offered, per-account prefs, and a
+// derived `index` (authuser slot, -1 for delegated) still used by index-based
+// helpers like the compose window and sortByOrder's fallback.
 function decorate(list: Profile[]) {
   const withPrefs = list.map((p) => {
     const ap = prefs?.getAccount(p.email) ?? {};
-    return { ...p, index: authIdx(p), order: ap.order, label: ap.label };
+    return {
+      ...p,
+      key: keyOf(p),
+      kind: p.ref.kind,
+      index: authIdx(p),
+      hasCalendar: surfacesForRef(p.ref).includes('calendar'),
+      order: ap.order,
+      label: ap.label,
+    };
   });
   return sortByOrder(withPrefs);
 }
@@ -204,23 +214,27 @@ function removeAccount(email: string): void {
   removed!.add(email); // persist so detection skips it from now on
   const profile = profiles.find((p) => p.email === email);
   if (!profile) return;
-  const idx = authIdx(profile);
   const wasActive = manager?.activeKey() === keyOf(profile);
   profiles.splice(profiles.indexOf(profile), 1);
   seenEmails.delete(email);
-  delete unreadCounts[idx];
+  delete unreadCounts[keyOf(profile)];
   for (const surface of SURFACES) manager?.discardView(keyOf(profile), surface);
   pushProfiles();
   pushUnread();
-  applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
-  if (wasActive && profiles[0]) switchSurface(authIdx(profiles[0]), 'mail');
+  applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
+  if (wasActive && profiles[0]) showAccount(profiles[0].ref, 'mail');
 }
 
-function switchSurface(index: number, surface: Surface): void {
-  manager?.show(authRef(index), surface);
+// Show an account's surface (creates the view lazily) and re-gate notifications.
+function showAccount(ref: AccountRef, surface: Surface): void {
+  manager?.show(ref, surface);
   // A first switch to an app surface just created its view; gate it right away
   // (the app surfaces never notify in v1) instead of on the next 60s tick.
   refreshNotifyAllowed();
+}
+// Authuser convenience used by the index-based detection state machine.
+function switchSurface(index: number, surface: Surface): void {
+  showAccount(authRef(index), surface);
 }
 
 function startDetection(): void {
@@ -272,7 +286,7 @@ function handleInput(input: KeyInput): void {
   if (action.type === 'switch') {
     const ordered = [...profiles].sort((a, b) => (a.order ?? authIdx(a)) - (b.order ?? authIdx(b)));
     const target = ordered[action.n - 1];
-    if (target) switchSurface(authIdx(target), 'mail');
+    if (target) showAccount(target.ref, 'mail');
   } else if (action.type === 'compose') {
     const activeKey = manager?.activeKey();
     const active = activeKey ? idxOfKey(activeKey) : null;
@@ -367,11 +381,9 @@ function createWindow(): void {
     mainWindow,
     PRELOAD_PATH,
     (accountKey, count) => {
-      const idx = idxOfKey(accountKey);
-      if (idx == null) return;
-      unreadCounts[idx] = count;
+      unreadCounts[accountKey] = count;
       pushUnread();
-      applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
+      applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
     },
     (accountKey, surface, threadId) => {
       const idx = idxOfKey(accountKey);
@@ -609,9 +621,10 @@ function setupNotifications(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.on(IPC.SWITCH_SURFACE, (_e, arg: { index: number; surface: Surface }) =>
-    switchSurface(arg.index, arg.surface),
-  );
+  ipcMain.on(IPC.SWITCH_SURFACE, (_e, arg: { key: string; surface: Surface }) => {
+    const p = profiles.find((x) => keyOf(x) === arg.key);
+    if (p) showAccount(p.ref, arg.surface);
+  });
   ipcMain.on(IPC.REDETECT, () => redetect());
   ipcMain.on(IPC.ADD_ACCOUNT, () => addAccount());
   ipcMain.on(IPC.SET_COLOR, (_e, arg: { email: string; color: string }) => {

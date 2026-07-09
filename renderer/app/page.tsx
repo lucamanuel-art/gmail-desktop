@@ -9,15 +9,23 @@ import { APP_ICONS, WaffleIcon } from './app-icons';
 import type { ChangelogVersion } from './changelog-types';
 
 export interface Profile {
+  key: string;
+  kind: 'authuser' | 'delegated';
   index: number;
   email: string;
   name: string;
   avatarUrl: string;
   color: string;
+  hasCalendar: boolean;
   order?: number;
   label?: string;
 }
 export type { Surface };
+
+export interface DelegatedSuggestion {
+  email: string;
+  mailUrl: string;
+}
 
 export type UpdateState =
   | 'idle'
@@ -56,10 +64,13 @@ export interface Prefs {
 
 interface DesktopBridge {
   onProfilesChanged(cb: (profiles: Profile[]) => void): void;
-  onUnreadChanged(cb: (counts: Record<number, number>) => void): void;
-  switchSurface(index: number, surface: Surface): void;
+  onUnreadChanged(cb: (counts: Record<string, number>) => void): void;
+  switchSurface(key: string, surface: Surface): void;
   redetect(): void;
   addAccount(): void;
+  addDelegated(): void;
+  addDelegatedSuggestion(arg: { email: string; mailUrl: string }): void;
+  onDelegatedSuggestions(cb: (arg: { suggestions: DelegatedSuggestion[] }) => void): void;
   setColor(email: string, color: string): void;
   removeAccount(email: string): void;
   toggleSettings(open: boolean): void;
@@ -105,6 +116,16 @@ function CalendarIcon({ className = '' }: { className?: string }) {
   );
 }
 
+// A small corner badge marking a profile as a delegated mailbox (someone else's
+// inbox you have access to), so it's distinguishable from your own accounts.
+function DelegatedBadge({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+    </svg>
+  );
+}
+
 function PlusIcon({ className = '' }: { className?: string }) {
   return (
     <svg
@@ -140,16 +161,18 @@ function GearIcon({ className = '' }: { className?: string }) {
 
 export default function Sidebar() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [unread, setUnread] = useState<Record<number, number>>({});
-  const [active, setActive] = useState<{ index: number; surface: Surface } | null>(null);
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  const [active, setActive] = useState<{ key: string; surface: Surface } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' });
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [dragEmail, setDragEmail] = useState<string | null>(null);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<DelegatedSuggestion[]>([]);
   const S = getStrings(prefs?.reneMode === true);
-  // Account index whose waffle (Google apps) flyout is expanded; one at a time.
-  const [appsOpenFor, setAppsOpenFor] = useState<number | null>(null);
+  // Account key whose waffle (Google apps) flyout is expanded; one at a time.
+  const [appsOpenFor, setAppsOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -158,11 +181,12 @@ export default function Sidebar() {
       setProfiles(list);
       // Keep the active selection valid: re-derive if the active profile vanished.
       setActive((cur) => {
-        if (cur && list.some((p) => p.index === cur.index)) return cur;
-        return list[0] ? { index: list[0].index, surface: 'mail' } : null;
+        if (cur && list.some((p) => p.key === cur.key)) return cur;
+        return list[0] ? { key: list[0].key, surface: 'mail' } : null;
       });
     });
     bridge.onUnreadChanged(setUnread);
+    bridge.onDelegatedSuggestions(({ suggestions: s }) => setSuggestions(s));
     bridge.onSettingsForceClose(() => setSettingsOpen(false));
     bridge.onSettingsForceOpen(() => setSettingsOpen(true));
     bridge.onUpdateStatus(setUpdate);
@@ -184,18 +208,30 @@ export default function Sidebar() {
     }
   }, [prefs?.theme]);
 
-  function open(index: number, surface: Surface) {
+  function open(key: string, surface: Surface) {
     if (settingsOpen) setSettingsOpen(false);
     setAppsOpenFor(null);
-    setActive({ index, surface });
-    window.desktop?.switchSurface(index, surface);
+    setPlusOpen(false);
+    setActive({ key, surface });
+    window.desktop?.switchSurface(key, surface);
   }
-  function toggleApps(index: number) {
-    setAppsOpenFor((cur) => (cur === index ? null : index));
+  function toggleApps(key: string) {
+    setAppsOpenFor((cur) => (cur === key ? null : key));
   }
   function addAccount() {
     if (settingsOpen) setSettingsOpen(false);
+    setPlusOpen(false);
     window.desktop?.addAccount();
+  }
+  function addDelegated() {
+    if (settingsOpen) setSettingsOpen(false);
+    setPlusOpen(false);
+    window.desktop?.addDelegated();
+  }
+  function acceptSuggestion(s: DelegatedSuggestion) {
+    setSuggestions((cur) => cur.filter((x) => x.email !== s.email));
+    setPlusOpen(false);
+    window.desktop?.addDelegatedSuggestion(s);
   }
   function redetect() {
     if (settingsOpen) setSettingsOpen(false);
@@ -204,6 +240,7 @@ export default function Sidebar() {
   function openSettings() {
     setSettingsOpen(true);
     setAppsOpenFor(null);
+    setPlusOpen(false);
     window.desktop?.toggleSettings(true);
   }
   function closeSettings() {
@@ -221,22 +258,28 @@ export default function Sidebar() {
     setDragEmail(null);
   }
 
+  // Only suggest delegates we don't already have as a profile.
+  const freshSuggestions = suggestions.filter(
+    (s) => !profiles.some((p) => p.email.toLowerCase() === s.email.toLowerCase()),
+  );
+
   return (
     <div className="flex h-screen w-full bg-neutral-100 text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
       <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 py-4">
         {/* Scrollable so an expanded waffle never pushes settings off-screen. */}
         <div className="flex w-full flex-col items-center gap-2 overflow-y-auto [scrollbar-width:none]">
         {profiles.map((p) => {
-          const mailActive = active?.index === p.index && active.surface === 'mail';
-          const calActive = active?.index === p.index && active.surface === 'calendar';
+          const mailActive = active?.key === p.key && active.surface === 'mail';
+          const calActive = active?.key === p.key && active.surface === 'calendar';
           const appActive =
-            active?.index === p.index && active.surface !== 'mail' && active.surface !== 'calendar';
-          const appsOpen = appsOpenFor === p.index;
+            active?.key === p.key && active.surface !== 'mail' && active.surface !== 'calendar';
+          const appsOpen = appsOpenFor === p.key;
           const showImg = p.avatarUrl && !brokenAvatars[p.avatarUrl];
-          const count = unread[p.index] ?? 0;
+          const count = unread[p.key] ?? 0;
+          const isDelegated = p.kind === 'delegated';
           return (
             <div
-              key={p.index}
+              key={p.key}
               draggable
               onDragStart={() => setDragEmail(p.email)}
               onDragOver={(e) => e.preventDefault()}
@@ -246,8 +289,8 @@ export default function Sidebar() {
             >
               <div className="relative">
                 <button
-                  onClick={() => open(p.index, 'mail')}
-                  title={displayName(p)}
+                  onClick={() => open(p.key, 'mail')}
+                  title={isDelegated ? `${displayName(p)} ${S.delegatedTooltipSuffix}` : displayName(p)}
                   className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white transition-all duration-150 ${
                     mailActive
                       ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-100 dark:ring-offset-neutral-950'
@@ -274,38 +317,50 @@ export default function Sidebar() {
                     {count > 99 ? '99+' : count}
                   </span>
                 )}
+                {isDelegated && (
+                  <span
+                    className="pointer-events-none absolute -bottom-0.5 -left-0.5 flex h-[16px] w-[16px] items-center justify-center rounded-full bg-neutral-700 text-white ring-2 ring-neutral-100 dark:bg-neutral-300 dark:text-neutral-900 dark:ring-neutral-950"
+                    title={S.delegatedTooltipSuffix}
+                  >
+                    <DelegatedBadge className="h-[10px] w-[10px]" />
+                  </span>
+                )}
               </div>
-              <button
-                onClick={() => open(p.index, 'calendar')}
-                title={`${displayName(p)}${S.calendarTooltipSuffix}`}
-                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
-                  calActive
-                    ? 'bg-black/10 ring-1 ring-black/20 dark:bg-white/15 dark:ring-white/30'
-                    : 'opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10'
-                }`}
-              >
-                <CalendarIcon className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => toggleApps(p.index)}
-                title={`${displayName(p)} — Google apps`}
-                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
-                  appActive || appsOpen
-                    ? 'bg-black/10 text-neutral-900 ring-1 ring-black/20 dark:bg-white/15 dark:text-white dark:ring-white/30'
-                    : 'text-neutral-500 opacity-70 hover:bg-black/5 hover:opacity-100 dark:text-neutral-400 dark:hover:bg-white/10'
-                }`}
-              >
-                <WaffleIcon className="h-4 w-4" />
-              </button>
+              {p.hasCalendar && (
+                <button
+                  onClick={() => open(p.key, 'calendar')}
+                  title={`${displayName(p)}${S.calendarTooltipSuffix}`}
+                  className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
+                    calActive
+                      ? 'bg-black/10 ring-1 ring-black/20 dark:bg-white/15 dark:ring-white/30'
+                      : 'opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10'
+                  }`}
+                >
+                  <CalendarIcon className="h-5 w-5" />
+                </button>
+              )}
+              {p.kind === 'authuser' && (
+                <button
+                  onClick={() => toggleApps(p.key)}
+                  title={`${displayName(p)} — Google apps`}
+                  className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
+                    appActive || appsOpen
+                      ? 'bg-black/10 text-neutral-900 ring-1 ring-black/20 dark:bg-white/15 dark:text-white dark:ring-white/30'
+                      : 'text-neutral-500 opacity-70 hover:bg-black/5 hover:opacity-100 dark:text-neutral-400 dark:hover:bg-white/10'
+                  }`}
+                >
+                  <WaffleIcon className="h-4 w-4" />
+                </button>
+              )}
               {appsOpen && (
                 <div className="grid grid-cols-2 gap-1 rounded-lg bg-black/5 p-1.5 dark:bg-white/5">
                   {APP_SURFACES.map((s) => {
                     const Icon = APP_ICONS[s];
-                    const isActive = active?.index === p.index && active.surface === s;
+                    const isActive = active?.key === p.key && active.surface === s;
                     return (
                       <button
                         key={s}
-                        onClick={() => open(p.index, s)}
+                        onClick={() => open(p.key, s)}
                         title={`${displayName(p)} — ${SURFACE_CONFIG[s].label}`}
                         className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
                           isActive
@@ -326,13 +381,59 @@ export default function Sidebar() {
 
         <div className="my-1 h-px w-8 shrink-0 bg-black/10 dark:bg-white/10" />
 
-        <button
-          onClick={addAccount}
-          title={S.addAccountTooltip}
-          className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-black/20 text-neutral-500 transition hover:border-black/40 hover:text-neutral-900 dark:border-white/20 dark:text-neutral-400 dark:hover:border-white/40 dark:hover:text-white"
-        >
-          <PlusIcon className="h-5 w-5" />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setPlusOpen((v) => !v)}
+            title={S.addAccountTooltip}
+            className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-black/20 text-neutral-500 transition hover:border-black/40 hover:text-neutral-900 dark:border-white/20 dark:text-neutral-400 dark:hover:border-white/40 dark:hover:text-white"
+          >
+            <PlusIcon className="h-5 w-5" />
+          </button>
+          {freshSuggestions.length > 0 && !plusOpen && (
+            <span className="pointer-events-none absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-neutral-100 dark:ring-neutral-950">
+              {freshSuggestions.length}
+            </span>
+          )}
+          {plusOpen && (
+            <>
+              {/* click-away backdrop */}
+              <div className="fixed inset-0 z-10" onClick={() => setPlusOpen(false)} />
+              <div className="absolute bottom-0 left-[60px] z-20 w-60 rounded-lg border border-black/10 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-neutral-800">
+                <button
+                  onClick={addAccount}
+                  className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-neutral-800 hover:bg-black/5 dark:text-neutral-100 dark:hover:bg-white/10"
+                >
+                  {S.addAccountLabel}
+                </button>
+                <button
+                  onClick={addDelegated}
+                  className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-neutral-800 hover:bg-black/5 dark:text-neutral-100 dark:hover:bg-white/10"
+                >
+                  {S.addDelegatedLabel}
+                </button>
+                {freshSuggestions.length > 0 && (
+                  <>
+                    <div className="mx-2 my-1 border-t border-black/10 dark:border-white/10" />
+                    <div className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+                      {S.delegatedSuggestionsHeading}
+                    </div>
+                    {freshSuggestions.map((s) => (
+                      <button
+                        key={s.email}
+                        onClick={() => acceptSuggestion(s)}
+                        title={S.addDelegatedSuggestionTooltip}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-neutral-800 hover:bg-black/5 dark:text-neutral-100 dark:hover:bg-white/10"
+                      >
+                        <PlusIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                        <span className="truncate">{s.email}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="mt-auto">
           <button

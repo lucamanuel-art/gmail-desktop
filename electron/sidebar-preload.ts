@@ -3,6 +3,8 @@ import { IPC } from './ipc';
 import type { Surface } from '../renderer/lib/surfaces';
 
 interface Profile {
+  key: string;
+  kind: 'authuser' | 'delegated';
   index: number;
   email: string;
   name: string;
@@ -16,13 +18,19 @@ contextBridge.exposeInMainWorld('desktop', {
   onProfilesChanged: (cb: (profiles: Profile[]) => void): void => {
     ipcRenderer.on(IPC.PROFILES_CHANGED, (_e, profiles) => cb(profiles));
   },
-  onUnreadChanged: (cb: (counts: Record<number, number>) => void): void => {
+  onUnreadChanged: (cb: (counts: Record<string, number>) => void): void => {
     ipcRenderer.on(IPC.UNREAD_CHANGED, (_e, counts) => cb(counts));
   },
-  switchSurface: (index: number, surface: Surface): void =>
-    ipcRenderer.send(IPC.SWITCH_SURFACE, { index, surface }),
+  switchSurface: (key: string, surface: Surface): void =>
+    ipcRenderer.send(IPC.SWITCH_SURFACE, { key, surface }),
   redetect: (): void => ipcRenderer.send(IPC.REDETECT),
   addAccount: (): void => ipcRenderer.send(IPC.ADD_ACCOUNT),
+  addDelegated: (): void => ipcRenderer.send(IPC.ADD_DELEGATED),
+  addDelegatedSuggestion: (arg: { email: string; mailUrl: string }): void =>
+    ipcRenderer.send(IPC.ADD_DELEGATED_SUGGESTION, arg),
+  onDelegatedSuggestions: (cb: (arg: { suggestions: { email: string; mailUrl: string }[] }) => void): void => {
+    ipcRenderer.on(IPC.DELEGATED_SUGGESTIONS, (_e, arg) => cb(arg));
+  },
   setColor: (email: string, color: string): void =>
     ipcRenderer.send(IPC.SET_COLOR, { email, color }),
   removeAccount: (email: string): void => ipcRenderer.send(IPC.REMOVE_ACCOUNT, { email }),

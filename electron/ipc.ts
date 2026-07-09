@@ -5,9 +5,11 @@ export const IPC = {
   NOTIFICATION_ACTIVATE: 'notification:activate', // send(threadId?: string) — clicked notification's thread when resolvable
   ACCOUNT_IDENTITY: 'account:identity', // send({email,name,avatarUrl})
   // renderer (sidebar) -> main
-  SWITCH_SURFACE: 'switch:surface', // send({index, surface:'mail'|'calendar'})
+  SWITCH_SURFACE: 'switch:surface', // send({key, surface:'mail'|'calendar'}) — key = accountKey
   REDETECT: 'accounts:redetect', // send()
   ADD_ACCOUNT: 'accounts:add', // send() — open Google's add-session flow in a visible view
+  ADD_DELEGATED: 'delegated:add', // send() — start click-through capture of a delegated mailbox
+  ADD_DELEGATED_SUGGESTION: 'delegated:add-suggestion', // send({email, mailUrl}) — accept an auto-detected suggestion
   SET_COLOR: 'color:set', // send({email, color})
   REMOVE_ACCOUNT: 'accounts:remove', // send({email}) — hide account + skip on detect
   SETTINGS_TOGGLE: 'settings:toggle', // send({open:boolean})
@@ -25,7 +27,8 @@ export const IPC = {
   CHANGELOG_GET: 'changelog:get', // invoke() -> ChangelogVersion[] — parsed CHANGELOG.md
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
-  UNREAD_CHANGED: 'unread:changed', // Record<index, number>
+  UNREAD_CHANGED: 'unread:changed', // Record<accountKey, number>
+  DELEGATED_SUGGESTIONS: 'delegated:suggestions', // { suggestions: {email, mailUrl}[] } — best-effort auto-detected delegates to offer
   UPDATE_STATUS: 'update:status', // { state, currentVersion, version?, percent?, message? }
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
   SETTINGS_FORCE_OPEN: 'settings:force-open', // main -> renderer: open the settings panel (e.g. tray "Check for updates")

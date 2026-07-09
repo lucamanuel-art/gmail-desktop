@@ -62,6 +62,11 @@ export interface UiStrings {
   accountsFootnoteAfter: string;
 
   addAccountTooltip: string;
+  addAccountLabel: string;
+  addDelegatedLabel: string;
+  delegatedSuggestionsHeading: string;
+  addDelegatedSuggestionTooltip: string;
+  delegatedTooltipSuffix: string;
   settingsTooltip: string;
   calendarTooltipSuffix: string;
 }
@@ -173,6 +178,11 @@ export const STRINGS_NORMAL: UiStrings = {
     " button in the sidebar to sign in to a new account, or add one via Gmail's own account switcher and then re-detect.",
 
   addAccountTooltip: 'Add account',
+  addAccountLabel: 'Add account',
+  addDelegatedLabel: 'Add delegated mailbox',
+  delegatedSuggestionsHeading: 'Suggested delegated',
+  addDelegatedSuggestionTooltip: 'Add this delegated mailbox',
+  delegatedTooltipSuffix: '(delegated)',
   settingsTooltip: 'Settings',
   calendarTooltipSuffix: ' — Calendar',
 };
@@ -240,6 +250,11 @@ export const STRINGS_RENE: UiStrings = {
   accountsFootnoteAfter: ' om er iemand bij te doen.',
 
   addAccountTooltip: 'Doe er iemand bij',
+  addAccountLabel: 'Doe er iemand bij',
+  addDelegatedLabel: 'Doe een gedeelde postbus erbij',
+  delegatedSuggestionsHeading: 'Gevonden postbussen',
+  addDelegatedSuggestionTooltip: 'Doe deze gedeelde postbus erbij',
+  delegatedTooltipSuffix: '(gedeeld)',
   settingsTooltip: 'Knopjes',
   calendarTooltipSuffix: ' — Agenda',
 };
