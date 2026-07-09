@@ -7,6 +7,7 @@ import { parseChangelog, type ChangelogVersion } from './changelog';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
 import { SURFACES, surfacesForRef } from '../renderer/lib/surfaces';
 import { accountKey, parseAccountKey, type AccountRef } from './account-ref';
+import { DelegatedStore, type StoredDelegate } from './delegated-store';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
 import { PrefsStore } from './prefs-store';
@@ -49,6 +50,7 @@ let mainWindow: BrowserWindow | null = null;
 let manager: ProfileViewManager | null = null;
 let colors: ColorStore | null = null;
 let removed: RemovedStore | null = null;
+let delegated: DelegatedStore | null = null;
 let prefs: PrefsStore | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -95,6 +97,48 @@ const idxOfKey = (key: string): number | null => {
   const parsed = parseAccountKey(key);
   return parsed.kind === 'authuser' ? parsed.index : null;
 };
+
+// Stable-ish color for a delegated mailbox (no authuser index to key off).
+function colorForEmail(email: string): string {
+  let h = 0;
+  for (let i = 0; i < email.length; i++) h = (h * 31 + email.charCodeAt(i)) | 0;
+  return colorForIndex(Math.abs(h));
+}
+
+function delegatedProfileFor(d: StoredDelegate): Profile {
+  const ref: AccountRef = {
+    kind: 'delegated',
+    email: d.email,
+    mailUrl: d.mailUrl,
+    calendarUrl: d.calendarUrl,
+  };
+  return {
+    ref,
+    kind: 'delegated',
+    email: d.email,
+    name: d.email, // no reliable display name from the switcher; email is honest
+    avatarUrl: '',
+    color: colors?.get(d.email) ?? colorForEmail(d.email),
+  };
+}
+
+// Add sidebar profiles for every persisted delegated mailbox not already present
+// (and not user-removed). Idempotent: skips emails already held as a profile.
+function loadDelegatedProfiles(): void {
+  if (!delegated) return;
+  let added = false;
+  for (const d of delegated.list()) {
+    const email = d.email.toLowerCase();
+    if (removed?.has(email)) continue;
+    if (profiles.some((p) => p.email.toLowerCase() === email)) continue;
+    profiles.push(delegatedProfileFor({ ...d, email }));
+    added = true;
+  }
+  if (added) {
+    pushProfiles();
+    syncCalendarViews();
+  }
+}
 
 // Decorate for the sidebar renderer: the stable `key` (accountKey) it routes by,
 // the `kind`, whether a calendar surface is offered, per-account prefs, and a
@@ -176,6 +220,15 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
   probingIndex = null;
   if (decision.register && identity.email) {
     seenEmails.add(identity.email);
+    // If this same mailbox was showing as a delegated entry, the owned authuser
+    // account supersedes it (same inbox) — drop the delegated duplicate.
+    const dup = profiles.findIndex(
+      (p) => p.kind === 'delegated' && p.email.toLowerCase() === identity.email.toLowerCase(),
+    );
+    if (dup !== -1) {
+      for (const surface of SURFACES) manager?.discardView(keyOf(profiles[dup]), surface);
+      profiles.splice(dup, 1);
+    }
     const color = colors!.get(identity.email) ?? colorForIndex(index);
     profiles.push({
       ref: authRef(index),
@@ -377,6 +430,7 @@ function createWindow(): void {
   if (stored.maximized) mainWindow.maximize();
   colors = new ColorStore(join(app.getPath('userData'), 'colors.json'));
   removed = new RemovedStore(join(app.getPath('userData'), 'removed.json'));
+  delegated = new DelegatedStore(join(app.getPath('userData'), 'delegated.json'));
   manager = new ProfileViewManager(
     mainWindow,
     PRELOAD_PATH,
@@ -443,6 +497,7 @@ function createWindow(): void {
   else void mainWindow.loadURL('app://bundle/');
 
   mainWindow.webContents.on('did-finish-load', () => {
+    loadDelegatedProfiles(); // surface persisted delegated mailboxes immediately
     pushProfiles(); // re-push on any (re)load so the sidebar repopulates
     pushPrefs();
     applyReneZoom(); // a (re)load resets the renderer's zoom factor
