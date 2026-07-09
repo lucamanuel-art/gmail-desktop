@@ -3,6 +3,39 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] — 2026-07-09
+
+### Toegevoegd
+- **Gedelegeerde postvakken.** Postvakken die een ander account aan jou heeft
+  gedelegeerd (Gmails "toegang delegeren") verschijnen nu als eigen account in
+  de zijbalk. De app herkent gedelegeerde postvakken waar je al toegang toe hebt
+  en stelt ze voor; je kunt ze toevoegen of verwijderen, en ze worden onthouden
+  na een herstart. Elk postvak heeft zijn eigen ongelezen-teller en meldingen,
+  net als een gewoon account.
+
+### Opgelost
+- **Inloggen met een Workspace-account dat via Microsoft gaat, werkt nu.** Gaat
+  het inloggen van je Google Workspace-domein via Microsoft (Entra ID /
+  Office 365), dan mislukte het toevoegen van het account eerder met de melding
+  "AADSTS900561: The endpoint only accepts POST requests". De app stuurde de
+  Microsoft-inlogstap naar je browser als het verkeerde soort verzoek; nu blijft
+  het inloggen in de app zelf, zodat het gewoon lukt.
+
+### Added
+- **Delegated mailboxes.** Mailboxes another account has delegated to you
+  (Gmail's "delegate access") now appear in the sidebar as their own account.
+  The app detects delegated mailboxes you already have access to and suggests
+  them; you can add or remove them, and they're remembered across restarts. Each
+  has its own unread badge and notifications, just like a regular account.
+
+### Fixed
+- **Signing in with a Microsoft-federated Workspace account now works.** If your
+  Google Workspace domain signs in through Microsoft (Entra ID / Office 365),
+  adding the account previously failed with "AADSTS900561: The endpoint only
+  accepts POST requests". The app was handing the Microsoft sign-in step to your
+  browser as the wrong kind of request; it now keeps the sign-in inside the app
+  so it completes normally.
+
 ## [0.2.1] — 2026-07-08
 
 ### Toegevoegd
