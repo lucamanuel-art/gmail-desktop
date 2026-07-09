@@ -162,15 +162,19 @@ async function scanSwitcherEntries(): Promise<Array<{ email: string; mailUrl: st
 // New delegates from the switcher not already owned, removed, or present.
 function suggestableDelegates(
   entries: Array<{ email: string; mailUrl: string }>,
+  respectRemoved: boolean,
 ): Array<{ email: string; mailUrl: string }> {
-  const removedKeys = removed?.list().map((e) => `d:${e.toLowerCase()}`) ?? [];
+  // Launch auto-suggest respects removals (don't nag); on-demand add does not,
+  // so a previously-removed delegate can be re-added (which clears its removal).
+  const removedKeys = respectRemoved ? (removed?.list().map((e) => `d:${e.toLowerCase()}`) ?? []) : [];
   return planDelegated(entries, [...seenEmails], removedKeys)
     .filter((e) => !profiles.some((p) => p.email.toLowerCase() === e.email))
     .map((e) => ({ email: e.email, mailUrl: e.mailUrl }));
 }
 
 async function scanDelegatedSuggestions(): Promise<Array<{ email: string; mailUrl: string }>> {
-  return suggestableDelegates(await scanSwitcherEntries());
+  // On-demand add: show all discoverable delegates, including previously removed.
+  return suggestableDelegates(await scanSwitcherEntries(), false);
 }
 
 function pushDelegatedSuggestions(suggestions: Array<{ email: string; mailUrl: string }>): void {
@@ -202,7 +206,7 @@ async function refreshAndSuggestDelegated(): Promise<void> {
     }
   }
   if (changed) pushProfiles();
-  if (entries.length > 0) pushDelegatedSuggestions(suggestableDelegates(entries));
+  if (entries.length > 0) pushDelegatedSuggestions(suggestableDelegates(entries, true));
 }
 
 // Register a delegated mailbox (from click-through pick or an accepted
