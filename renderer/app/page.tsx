@@ -74,6 +74,7 @@ interface DesktopBridge {
   setColor(email: string, color: string): void;
   removeAccount(email: string): void;
   toggleSettings(open: boolean): void;
+  setMenuOverlay(open: boolean): void;
   onSettingsForceClose(cb: () => void): void;
   onSettingsForceOpen(cb: () => void): void;
   checkForUpdate(): void;
@@ -198,6 +199,12 @@ export default function Sidebar() {
     bridge.onUpdateStatus(setUpdate);
     bridge.onPrefsChanged((p) => setPrefs(p as Prefs));
   }, []);
+
+  // The "+" menu extends over the content area; hide/show the native content
+  // view (main-side) so the menu shows above it, and restore when it closes.
+  useEffect(() => {
+    window.desktop?.setMenuOverlay(plusOpen);
+  }, [plusOpen]);
 
   useEffect(() => {
     const choice = prefs?.theme ?? 'system';
@@ -405,7 +412,7 @@ export default function Sidebar() {
             <>
               {/* click-away backdrop */}
               <div className="fixed inset-0 z-10" onClick={() => setPlusOpen(false)} />
-              <div className="absolute bottom-0 left-[60px] z-20 w-60 rounded-lg border border-black/10 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-neutral-800">
+              <div className="absolute top-0 left-[60px] z-20 w-60 rounded-lg border border-black/10 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-neutral-800">
                 <button
                   onClick={addAccount}
                   className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-neutral-800 hover:bg-black/5 dark:text-neutral-100 dark:hover:bg-white/10"

@@ -791,6 +791,13 @@ function registerIpc(): void {
     if (arg.open) manager?.hideAll();
     else manager?.showActive();
   });
+  // A sidebar popup (the "+" menu) extends past the 72px nav over the content
+  // area; the content view is a native layer above the sidebar page, so hide it
+  // while the popup is open (same trick as the settings panel) and restore after.
+  ipcMain.on(IPC.OVERLAY_TOGGLE, (_e, arg: { open: boolean }) => {
+    if (arg.open) manager?.hideAll();
+    else if (!settingsPanelOpen) manager?.showActive();
+  });
   ipcMain.on(IPC.SET_AUTO_START, (_e, v: boolean) => setAutoStart(v));
   ipcMain.on(IPC.SET_SNOOZE, (_e, minutes: number | null) => setSnooze(minutes));
   ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean }) => {

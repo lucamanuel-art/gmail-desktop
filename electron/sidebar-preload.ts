@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('desktop', {
     ipcRenderer.on(IPC.UPDATE_STATUS, (_e, status) => cb(status));
   },
   toggleSettings: (open: boolean): void => ipcRenderer.send(IPC.SETTINGS_TOGGLE, { open }),
+  setMenuOverlay: (open: boolean): void => ipcRenderer.send(IPC.OVERLAY_TOGGLE, { open }),
   onSettingsForceClose: (cb: () => void): void => {
     ipcRenderer.on(IPC.SETTINGS_FORCE_CLOSE, () => cb());
   },
