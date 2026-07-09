@@ -248,6 +248,17 @@ function pushProfiles(): void {
 function pushUnread(): void {
   mainWindow?.webContents.send(IPC.UNREAD_CHANGED, { ...unreadCounts });
 }
+// Delegated mailboxes the user has opted out of the taskbar badge. Owned
+// (authuser) accounts always count; only delegated entries are excludable.
+function excludedBadgeKeys(): Set<string> {
+  const keys = new Set<string>();
+  for (const p of profiles) {
+    if (p.kind === 'delegated' && prefs?.getAccount(p.email).badgeCount === false) {
+      keys.add(keyOf(p));
+    }
+  }
+  return keys;
+}
 function pushPrefs(): void {
   if (prefs) mainWindow?.webContents.send(IPC.PREFS_CHANGED, prefs.getAll());
 }
@@ -358,7 +369,7 @@ function removeAccount(email: string): void {
   for (const surface of SURFACES) manager?.discardView(keyOf(profile), surface);
   pushProfiles();
   pushUnread();
-  applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
+  applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys());
   if (wasActive && profiles[0]) showAccount(profiles[0].ref, 'mail');
 }
 
@@ -521,7 +532,7 @@ function createWindow(): void {
     (accountKey, count) => {
       unreadCounts[accountKey] = count;
       pushUnread();
-      applyBadge(unreadCounts, (n) => app.setBadgeCount(n));
+      applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys());
     },
     (accountKey, surface, threadId) => {
       const idx = idxOfKey(accountKey);
@@ -811,16 +822,18 @@ function registerIpc(): void {
   });
   ipcMain.on(IPC.SET_AUTO_START, (_e, v: boolean) => setAutoStart(v));
   ipcMain.on(IPC.SET_SNOOZE, (_e, minutes: number | null) => setSnooze(minutes));
-  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean }) => {
+  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean }) => {
     const patch: Record<string, unknown> = {};
     if ('label' in arg) patch.label = arg.label;
     if ('notify' in arg) patch.notify = arg.notify;
     if ('calendarNotify' in arg) patch.calendarNotify = arg.calendarNotify;
+    if ('badgeCount' in arg) patch.badgeCount = arg.badgeCount;
     prefs!.setAccount(arg.email, patch);
     pushProfiles();
     pushPrefs(); // keep the settings UI's per-account toggles in sync with what was stored
     refreshNotifyAllowed();
     syncCalendarViews();
+    applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys()); // reflect a badgeCount change immediately
   });
   ipcMain.on(IPC.SET_ACCOUNT_ORDER, (_e, arg: { emails: string[] }) => {
     prefs!.setOrder(arg.emails);
