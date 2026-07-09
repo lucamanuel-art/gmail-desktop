@@ -13,4 +13,10 @@ describe('applyBadge', () => {
     applyBadge({ a: 0 }, setBadge);
     expect(setBadge).toHaveBeenCalledWith(0);
   });
+  it('excludes the given keys from the badge total', () => {
+    const setBadge = vi.fn();
+    const total = applyBadge({ u0: 2, 'd:x@y.com': 3 }, setBadge, new Set(['d:x@y.com']));
+    expect(total).toBe(2);
+    expect(setBadge).toHaveBeenCalledWith(2);
+  });
 });
