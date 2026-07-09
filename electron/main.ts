@@ -1,6 +1,7 @@
 import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen, dialog } from 'electron';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { release } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { Tray } from 'electron';
 import { parseChangelog, type ChangelogVersion } from './changelog';
@@ -27,6 +28,14 @@ import { sortByOrder } from './account-order';
 import { notificationsAllowed } from './notification-policy';
 import { updateCheckPopup } from './update-popup';
 import { RENE_ZOOM_FACTOR, RENE_ZOOM_LEVEL } from './rene';
+
+// WSL/WSLg has no usable GPU stack: Electron's GPU process fails to initialize
+// and WSLg falls back to RDP "copy mode", leaving a black/degraded window. Force
+// software rendering there so the dev window actually shows. Must be called
+// before app 'ready'. No effect on the shipped Windows/macOS build.
+if (process.platform === 'linux' && /microsoft|WSL/i.test(release())) {
+  app.disableHardwareAcceleration();
+}
 
 const RENDERER_DIST = join(__dirname, '..', 'renderer', 'out');
 const CHANGELOG_PATH = join(__dirname, '..', 'CHANGELOG.md');
