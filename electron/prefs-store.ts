@@ -7,6 +7,7 @@ export interface AccountPref {
   zoom?: number;
   notify?: boolean;
   calendarNotify?: boolean;
+  badgeCount?: boolean;
 }
 export interface QuietHours {
   enabled: boolean;

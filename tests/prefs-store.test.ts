@@ -39,6 +39,14 @@ describe('PrefsStore', () => {
     expect(store.getAccount('a@x.com').order).toBe(1);
   });
 
+  it('round-trips a per-account badgeCount=false through save and load', () => {
+    const store = new PrefsStore(file);
+    store.setAccount('a@b.com', { badgeCount: false });
+    expect(store.getAll().accounts['a@b.com'].badgeCount).toBe(false);
+    // A fresh instance reading the same file sees it too.
+    expect(new PrefsStore(file).getAccount('a@b.com').badgeCount).toBe(false);
+  });
+
   it('tolerates a corrupt file by returning defaults', () => {
     const store = new PrefsStore(file);
     store.setTheme('dark'); // create the file
