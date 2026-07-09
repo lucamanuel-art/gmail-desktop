@@ -4,7 +4,7 @@
 
 **Goal:** Show Gmail delegated mailboxes as first-class sidebar entries (mail + unread + notifications, and a Calendar icon when a delegated calendar is reachable), alongside the user's own authuser accounts — robustly, so a Gmail UI change degrades gracefully instead of losing working mailboxes.
 
-**Architecture:** Generalize account identity from a bare integer `index` into a stable string `accountKey` plus a discriminated `AccountRef` that builds its own surface URLs. Delegated mailboxes live in a durable `delegated-store` (adopting Google's own URLs); a **manual add** path is the primary, always-works way to register them, and a best-effort **auto-scan** of Google's account switcher is a convenience layered on top with a health check that never drops the store to zero. Calendar availability is judged by redirect URL, not page content. Persistence is already email-keyed, so no migration.
+**Architecture:** Generalize account identity from a bare integer `index` into a stable string `accountKey` plus a discriminated `AccountRef` that builds its own surface URLs. Delegated mailboxes live in a durable `delegated-store` (adopting Google's own URLs). The primary, always-works way to register one is **click-through capture**: the user opens Google's own account switcher and clicks the delegate they want, and we record the URL the view lands on — no DOM scraping, so it is locale- and redesign-proof, captures the exact real URL even when it is opaque, and lets the user **curate exactly which** mailboxes appear. A zero-click **auto-scan** of the switcher DOM is an optional convenience layered on top (only if Gate 1 passes) that merely *suggests* mailboxes for the user to opt into — it never auto-adds — with a health check that never drops the store to zero. Calendar availability is judged by redirect URL, not page content. Persistence is already email-keyed, so no migration.
 
 **Tech Stack:** TypeScript, Electron (`WebContentsView`, shared `persist:google` session), Next.js renderer, vitest for pure logic, CDP live-test harness for Electron smoke.
 
@@ -457,56 +457,60 @@ git commit -m "feat: add durable delegated-mailbox store"
 
 ---
 
-### Task 7: Manual "Add delegated mailbox" — the primary path
+### Task 7: Add delegated mailbox via click-through capture — the primary path
 
-Always works; does not depend on reading the switcher. Populate the sidebar from `delegated-store` on launch.
+Always works; does **not** depend on reading (scraping) the switcher. The user opens Google's own account switcher and clicks the delegate; we record the URL the view lands on. This rides Google's durable URL contract, is locale- and redesign-proof, captures the exact real URL even when it is opaque, and lets the user curate exactly which mailboxes appear. Populate the sidebar from `delegated-store` on launch.
 
 **Files:**
-- Modify: `renderer/app/page.tsx` (the "+" menu), `electron/sidebar-preload.ts` (bridge), `electron/main.ts` (handler + launch-time load), `electron/ipc.ts` (channel)
-- Uses: `DelegatedStore` (Task 6), `delegatedMailUrl`/`delegatedCalendarUrl`/`isCalendarNoAccessUrl` (Task 1), `AccountRef` (Task 2).
+- Modify: `renderer/app/page.tsx` (the "+" menu), `electron/sidebar-preload.ts` (bridge), `electron/main.ts` (handler + launch-time load + capture flow), `electron/ipc.ts` (channels)
+- Uses: `DelegatedStore` (Task 6), `delegatedMailUrl`/`delegatedCalendarUrl`/`isCalendarNoAccessUrl` (Task 1), `AccountRef` (Task 2), `planDelegated` (Task 4).
 
 - [ ] **Step 1: Load persisted delegates on launch**
 
 In `main.ts`, on startup read `DelegatedStore.list()`, build a `kind: 'delegated'` `Profile` per entry (color via `color-store`, order/label via `prefs-store`, all email-keyed), and include them in the `PROFILES_CHANGED` payload alongside authuser profiles.
 
-- [ ] **Step 2: Add the manual entry point**
+- [ ] **Step 2: Add the click-through capture entry point (with guided instructions)**
 
-Extend the "+" control with "Add delegated mailbox" → email prompt → new IPC channel → main-side handler that builds the mail URL (Task 1), runs the calendar probe (Task 9), `upsert`s into `DelegatedStore`, and re-emits `PROFILES_CHANGED`. Skip if the email is already a known account.
+Extend the "+" control with "Add delegated mailbox" → new IPC channel → main-side handler that opens a **visible** Gmail view (the `/u/0/` account switcher) and lets the user pick the delegate using Google's own UI. Capture the URL the view lands on via `did-navigate` / `did-redirect-navigation`, validate it is a delegated mail URL (the form observed in Task 1 — not another authuser `/u/N/`, not a settings page), derive the delegate email from it, run `planDelegated` to skip owned/duplicate/removed accounts, run the calendar probe (Task 9), `upsert` into `DelegatedStore`, close the capture view, and re-emit `PROFILES_CHANGED`. Never scrape the switcher DOM in this path — the human does the selection, we only observe the landed URL. Provide a cancel path (user closes without picking → no-op).
 
-- [ ] **Step 3: Live smoke via CDP**
+- [ ] **Step 3: Guide the user through the capture**
 
-Relaunch under `--remote-debugging-port=9333`. Add a delegated mailbox manually; confirm it appears, persists across a restart, and its mail view loads Google's delegated inbox.
+The flow is not self-evident, so the UI must tell the user the steps. When the capture view opens, show a short instruction affordance (banner/overlay alongside the view): e.g. "Open the account menu (your avatar, top-right) and click the delegated mailbox you want to add — we'll add it automatically," plus a Cancel button. On a successful capture, show brief confirmation ("Added <email>") and close; on a landed URL that fails validation (e.g. the user clicked an owned account or a non-mailbox page), show a non-fatal "That's not a delegated mailbox — pick the delegated inbox from the menu" and keep the view open so they can retry. Keep all copy locale-neutral to the app's own UI (we control this text; only Google's switcher is in the user's language).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Live smoke via CDP**
+
+Relaunch under `--remote-debugging-port=9333`. Add a delegated mailbox by clicking it in the real switcher; confirm the instructions appear, the landed URL is captured, confirmation shows, it appears in the sidebar, persists across a restart, its mail view loads Google's delegated inbox, and picking a delegate already present is a no-op (dedup). Confirm an invalid pick shows the retry hint and cancelling adds nothing.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add renderer/app/page.tsx electron/sidebar-preload.ts electron/main.ts electron/ipc.ts
-git commit -m "feat: add delegated mailboxes via manual entry"
+git commit -m "feat: add delegated mailboxes via click-through capture"
 ```
 
 ---
 
-### Task 8: Auto-scan the account switcher (best-effort convenience)
+### Task 8: Auto-scan the account switcher → *suggestions* (optional convenience)
 
-Only ships if **Gate 1 (Task 1) passed**. Layered selectors + health check; merges into the store, never prunes it.
+Only ships if **Gate 1 (Task 1) passed**. This is pure garnish on top of the click-through primary path (Task 7): it **never auto-adds** a mailbox — it only *suggests* discovered delegates for the user to opt into, preserving the user's curation. Layered selectors + health check; the store is only ever written by an explicit user action, never by the scan itself.
 
 **Files:**
-- Modify: `electron/main.ts`
-- Uses: `SWITCHER_SCRAPE_JS`, `parseDelegatedEntries` (Task 1); `planDelegated` (Task 4); `mergeScan` + `DelegatedStore` (Task 6).
+- Modify: `electron/main.ts`, `renderer/app/page.tsx` (suggestion surface in the "+" menu)
+- Uses: `SWITCHER_SCRAPE_JS`, `parseDelegatedEntries` (Task 1); `planDelegated` (Task 4); `mergeScan` health check + `DelegatedStore` (Task 6).
 
-- [ ] **Step 1: Run the scan after authuser detection**
+- [ ] **Step 1: Scan for suggestions after authuser detection**
 
-In the `/u/0/` mail view, `executeJavaScript(SWITCHER_SCRAPE_JS)`, pass through `parseDelegatedEntries`, then `planDelegated(entries, knownAuthuserEmails, removedStore.keys())`. Convert survivors to `StoredDelegate` (calendar via Task 9), then `const { next, healthOk } = mergeScan(store.list(), scanned)`; write `next` back and, when `healthOk === false`, surface a non-fatal "couldn't refresh delegated accounts" hint (do **not** prune). Re-emit `PROFILES_CHANGED`.
+In the `/u/0/` mail view, `executeJavaScript(SWITCHER_SCRAPE_JS)`, pass through `parseDelegatedEntries`, then `planDelegated(entries, knownAuthuserEmails, removedStore.keys())` to drop owned/removed/duplicate and any already in `DelegatedStore`. Surface the survivors as **suggestions** in the "+" menu ("Found these delegated mailboxes — add?"), each a one-click opt-in that reuses the Task 7 capture/upsert path. Use `mergeScan(store.list(), scanned)` only for its **health check**: when `healthOk === false` (scan returned fewer than we hold), surface a non-fatal "couldn't refresh delegated accounts" hint and show no suggestions — never prune, never auto-add.
 
 - [ ] **Step 2: Live smoke via CDP**
 
-Confirm each real delegated mailbox is auto-detected and merged; then simulate a broken scrape (temporarily point `SWITCHER_SCRAPE_JS` at a selector that returns fewer/none) and confirm the existing mailboxes remain and the hint appears.
+Confirm real delegated mailboxes appear as suggestions and only get added when the user accepts one; confirm already-added mailboxes are not re-suggested (dedup). Then simulate a broken scrape (temporarily point `SWITCHER_SCRAPE_JS` at a selector that returns fewer/none) and confirm existing mailboxes remain, nothing is added, and the hint appears.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add electron/main.ts
-git commit -m "feat: auto-detect delegated mailboxes with health check"
+git add electron/main.ts renderer/app/page.tsx
+git commit -m "feat: suggest delegated mailboxes via best-effort auto-scan"
 ```
 
 ---
@@ -585,7 +589,7 @@ git commit -m "fix: route delegated-mailbox notifications by account key"
 
 ## Self-Review
 
-**Spec coverage:** account model → Tasks 2/5; `surfaces.ts` generalization → Task 3; persistence/last-known-good + health check → Task 6; manual-add (primary) → Task 7; auto-scan (best-effort, layered selectors, health check) → Task 8; dedup/removal/ordering → Task 4 + email-keyed stores; calendar-if-available via redirect signal → Task 9; sidebar rendering + marker → Task 10; unread/notifications → Task 11; URL/DOM/redirect capture + go/no-go gates → Task 1. All spec sections map to a task.
+**Spec coverage:** account model → Tasks 2/5; `surfaces.ts` generalization → Task 3; persistence/last-known-good + health check → Task 6; click-through capture (primary) → Task 7; auto-scan suggestions (best-effort, layered selectors, health check, never auto-adds) → Task 8; dedup/removal/ordering → Task 4 + email-keyed stores; calendar-if-available via redirect signal → Task 9; sidebar rendering + marker → Task 10; unread/notifications → Task 11; URL/DOM/redirect capture + go/no-go gates → Task 1. All spec sections map to a task.
 
 **Placeholder scan:** The only deferred values are the observed URL/DOM/redirect patterns in Task 1 — the task whose deliverable is to observe them — consumed downstream via typed functions, not literals. No stray TODOs.
 

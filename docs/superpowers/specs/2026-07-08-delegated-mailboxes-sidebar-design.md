@@ -64,9 +64,10 @@ kill switch, not a commitment to the full build:
 
 1. **Can the switcher be read without a trusted click?** If delegated entries
    only render after a user gesture we can't reliably synthesize into a Gmail
-   view, auto-detection is off the table and the feature ships **manual-add
-   only** (still useful). This does not block the feature — see the detection
-   design, which makes manual-add primary regardless.
+   view, the zero-click *auto-scan suggestions* are off the table and the
+   feature ships **click-through-capture only** (still fully useful — the user
+   just clicks the delegate themselves). This does not block the feature — see
+   the detection design, which makes click-through capture primary regardless.
 2. **Do unread + notifications fire for a delegated inbox?** Quick spike: does
    the delegated mail view report unread and raise a notification like an owned
    account? If not, the feature ships as delegated **viewing**, not delegated
@@ -119,15 +120,23 @@ manual control, not as the thing the feature depends on.
   store immediately; detection only ever *adds* to it. This converts the top
   risk from "mailboxes silently vanish" into "you keep everything; only
   discovery of a brand-new mailbox may need a manual add."
-- **Manual add (primary path).** The sidebar "+" menu gains "Add delegated
-  mailbox" (email input). This path never breaks — it does not depend on reading
-  the switcher — so it is the primary way to add a mailbox and the guaranteed
-  fallback if auto-scan ever stops working. It writes to `delegated-store`.
-- **Auto-scan (best-effort convenience).** After authuser detection, attempt to
-  read the account switcher in `/u/0/` mail and extract delegated entries
-  (email + Google's href), locale-independently. Any found are merged into
-  `delegated-store`. This saves the user from typing when it works, but the
-  feature does not rely on it.
+- **Click-through capture (primary path).** The sidebar "+" menu gains "Add
+  delegated mailbox," which opens Google's **own** account switcher in a visible
+  view and lets the user click the delegate they want; we record the URL the
+  view lands on (`did-navigate`) and write it to `delegated-store`. This never
+  scrapes the switcher DOM — the human does the selection, we only observe the
+  landed URL — so it rides Google's durable URL contract, is locale- and
+  redesign-proof, captures the exact real URL even when it is opaque (a form no
+  typed email could reconstruct), and lets the user curate **exactly which**
+  mailboxes appear. It is the primary way to add a mailbox and the guaranteed
+  fallback if auto-scan ever stops working.
+- **Auto-scan → suggestions (optional convenience).** After authuser detection,
+  attempt to read the account switcher in `/u/0/` mail and extract delegated
+  entries (email + Google's href), locale-independently. Any found are shown as
+  **suggestions** the user can one-click accept (routing through the capture
+  path above) — the scan **never auto-adds** to `delegated-store`, so it cannot
+  fight the user's curation or resurrect a removed mailbox. This saves typing
+  when it works, but the feature does not rely on it.
   - **Layered selectors:** match each entry through a fallback chain (stable
     `jslog` id → href pattern → structural shape), so a single DOM change does
     not kill detection.
@@ -193,8 +202,8 @@ breaking hard:
 
 | Risk | Likelihood | Mitigation | Residual |
 | --- | --- | --- | --- |
-| Switcher DOM changes → auto-scan stops finding mailboxes | High, eventually | Persist last-known-good + manual-add primary + health check + layered selectors | New-mailbox auto-discovery stops; existing mailboxes unaffected |
-| Switcher needs a trusted click we can't synthesize | Unknown until Task 0 | Manual-add is primary; auto-scan is best-effort | Ship manual-only (go/no-go gate 1) |
+| Switcher DOM changes → auto-scan stops finding mailboxes | High, eventually | Persist last-known-good + click-through capture primary (no scrape) + health check + layered selectors | Auto-scan *suggestions* stop; adding via click-through and all existing mailboxes unaffected |
+| Switcher needs a trusted click we can't synthesize | Unknown until Task 0 | Click-through capture is primary (the user clicks); auto-scan suggestions are best-effort | Ship click-through-only (go/no-go gate 1) |
 | Unread/notifications don't fire for delegated inbox | Medium | Same preload as owned accounts (delegated view is a normal Gmail page) | Ship viewing without alerting (go/no-go gate 2) |
 | Calendar availability misjudged | Low | Redirect-URL signal, not DOM scraping | Rare wrong icon; user ignores |
 | Shared session (account 0) expires | Low | Recovers on re-login | Temporary breakage |
