@@ -246,4 +246,39 @@ export class ProfileViewManager {
     if (!wc || wc.isDestroyed()) return;
     wc.send(IPC.NOTIFY_ALLOWED, allowed);
   }
+
+  // Open the account's One-Google switcher and scrape the (cross-origin)
+  // ogs.google.com widget frame with `scrapeJs`, returning whatever it yields
+  // (or []). Locale-independent: the avatar link is found by the email in its
+  // aria-label, never UI text. Best-effort for delegated-mailbox discovery
+  // (plan Tasks 7/8) — the ogs widget is Google-internal and may change.
+  async scrapeSwitcher(accountKey: string, scrapeJs: string): Promise<Array<{ email: string; href: string }>> {
+    const wc = this.views.get(viewKey(accountKey, 'mail'))?.webContents;
+    if (!wc || wc.isDestroyed()) return [];
+    // Open the chooser: click the avatar link (its aria-label carries the
+    // account email — matched by shape, not localized text).
+    const openJs = `(() => {
+      var re = /@[a-z0-9.-]+\\.[a-z]{2,}/i;
+      var a = Array.from(document.querySelectorAll('a[aria-label]'))
+        .find(function (x) { return re.test(x.getAttribute('aria-label') || ''); });
+      if (a) { a.click(); return true; }
+      return false;
+    })()`;
+    await wc.executeJavaScript(openJs).catch(() => false);
+    // Poll ALL ogs.google.com frames (there are several — account chooser, app
+    // launcher, …) for rendered delegated entries: the frame can exist before
+    // its list renders, and an empty [] is a valid array, so keep trying until
+    // some ogs frame yields entries or we time out (~6s).
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 300));
+      const ogsFrames = (wc.mainFrame?.framesInSubtree ?? []).filter((f) =>
+        f.url.startsWith('https://ogs.google.com'),
+      );
+      for (const frame of ogsFrames) {
+        const res = await frame.executeJavaScript(scrapeJs).catch(() => null);
+        if (Array.isArray(res) && res.length > 0) return res as Array<{ email: string; href: string }>;
+      }
+    }
+    return [];
+  }
 }

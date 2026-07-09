@@ -170,6 +170,8 @@ export default function Sidebar() {
   const [dragEmail, setDragEmail] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<DelegatedSuggestion[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [scanDone, setScanDone] = useState(false);
   const S = getStrings(prefs?.reneMode === true);
   // Account key whose waffle (Google apps) flyout is expanded; one at a time.
   const [appsOpenFor, setAppsOpenFor] = useState<string | null>(null);
@@ -186,7 +188,11 @@ export default function Sidebar() {
       });
     });
     bridge.onUnreadChanged(setUnread);
-    bridge.onDelegatedSuggestions(({ suggestions: s }) => setSuggestions(s));
+    bridge.onDelegatedSuggestions(({ suggestions: s }) => {
+      setSuggestions(s);
+      setScanning(false);
+      setScanDone(true);
+    });
     bridge.onSettingsForceClose(() => setSettingsOpen(false));
     bridge.onSettingsForceOpen(() => setSettingsOpen(true));
     bridge.onUpdateStatus(setUpdate);
@@ -225,7 +231,8 @@ export default function Sidebar() {
   }
   function addDelegated() {
     if (settingsOpen) setSettingsOpen(false);
-    setPlusOpen(false);
+    setScanning(true);
+    setScanDone(false);
     window.desktop?.addDelegated();
   }
   function acceptSuggestion(s: DelegatedSuggestion) {
@@ -411,7 +418,10 @@ export default function Sidebar() {
                 >
                   {S.addDelegatedLabel}
                 </button>
-                {freshSuggestions.length > 0 && (
+                {scanning && (
+                  <div className="px-3 py-2 text-sm text-neutral-400">{S.delegatedScanning}</div>
+                )}
+                {!scanning && freshSuggestions.length > 0 && (
                   <>
                     <div className="mx-2 my-1 border-t border-black/10 dark:border-white/10" />
                     <div className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
@@ -429,6 +439,9 @@ export default function Sidebar() {
                       </button>
                     ))}
                   </>
+                )}
+                {!scanning && scanDone && freshSuggestions.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-neutral-400">{S.delegatedNoneFound}</div>
                 )}
               </div>
             </>

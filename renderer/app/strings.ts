@@ -66,6 +66,8 @@ export interface UiStrings {
   addDelegatedLabel: string;
   delegatedSuggestionsHeading: string;
   addDelegatedSuggestionTooltip: string;
+  delegatedScanning: string;
+  delegatedNoneFound: string;
   delegatedTooltipSuffix: string;
   settingsTooltip: string;
   calendarTooltipSuffix: string;
@@ -182,6 +184,8 @@ export const STRINGS_NORMAL: UiStrings = {
   addDelegatedLabel: 'Add delegated mailbox',
   delegatedSuggestionsHeading: 'Suggested delegated',
   addDelegatedSuggestionTooltip: 'Add this delegated mailbox',
+  delegatedScanning: 'Looking in your account menu…',
+  delegatedNoneFound: 'No delegated mailboxes found.',
   delegatedTooltipSuffix: '(delegated)',
   settingsTooltip: 'Settings',
   calendarTooltipSuffix: ' — Calendar',
@@ -254,6 +258,8 @@ export const STRINGS_RENE: UiStrings = {
   addDelegatedLabel: 'Doe een gedeelde postbus erbij',
   delegatedSuggestionsHeading: 'Gevonden postbussen',
   addDelegatedSuggestionTooltip: 'Doe deze gedeelde postbus erbij',
+  delegatedScanning: 'Even in je accountmenu kijken…',
+  delegatedNoneFound: 'Geen gedeelde postbussen gevonden.',
   delegatedTooltipSuffix: '(gedeeld)',
   settingsTooltip: 'Knopjes',
   calendarTooltipSuffix: ' — Agenda',

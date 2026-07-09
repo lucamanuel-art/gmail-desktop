@@ -8,6 +8,8 @@ import { ProfileViewManager, type Profile, type Surface } from './profile-view-m
 import { SURFACES, surfacesForRef } from '../renderer/lib/surfaces';
 import { accountKey, parseAccountKey, type AccountRef } from './account-ref';
 import { DelegatedStore, type StoredDelegate } from './delegated-store';
+import { SWITCHER_SCRAPE_JS, parseDelegatedEntries } from './delegation';
+import { planDelegated } from './delegation-planner';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
 import { PrefsStore } from './prefs-store';
@@ -140,6 +142,37 @@ function loadDelegatedProfiles(): void {
   }
 }
 
+// Scan the /u/0 account switcher for delegated mailboxes to offer as
+// suggestions: {email, mailUrl} not already owned, removed, or present.
+// Best-effort (scrapes Google's ogs widget) — returns [] on any failure.
+async function scanDelegatedSuggestions(): Promise<Array<{ email: string; mailUrl: string }>> {
+  if (!manager) return [];
+  const raw = await manager.scrapeSwitcher(keyOfIndex(0), SWITCHER_SCRAPE_JS).catch(() => []);
+  const entries = parseDelegatedEntries(raw);
+  const removedKeys = removed?.list().map((e) => `d:${e.toLowerCase()}`) ?? [];
+  return planDelegated(entries, [...seenEmails], removedKeys)
+    .filter((e) => !profiles.some((p) => p.email.toLowerCase() === e.email))
+    .map((e) => ({ email: e.email, mailUrl: e.mailUrl }));
+}
+
+function pushDelegatedSuggestions(suggestions: Array<{ email: string; mailUrl: string }>): void {
+  mainWindow?.webContents.send(IPC.DELEGATED_SUGGESTIONS, { suggestions });
+}
+
+// Register a delegated mailbox (from click-through pick or an accepted
+// suggestion): persist it, clear any prior removal, surface it, and show it.
+function addDelegatedMailbox(email: string, mailUrl: string): void {
+  if (!delegated) return;
+  const e = email.trim().toLowerCase();
+  if (!e || !mailUrl) return;
+  if (profiles.some((p) => p.email.toLowerCase() === e)) return; // already have it
+  removed?.remove(e); // an explicit add un-hides a previously removed mailbox
+  const entry: StoredDelegate = { email: e, mailUrl, calendarUrl: null }; // calendar probe: Task 9
+  delegated.upsert(entry);
+  loadDelegatedProfiles(); // adds the profile + pushes to the sidebar
+  showAccount({ kind: 'delegated', email: e, mailUrl, calendarUrl: null }, 'mail');
+}
+
 // Decorate for the sidebar renderer: the stable `key` (accountKey) it routes by,
 // the `kind`, whether a calendar surface is offered, per-account prefs, and a
 // derived `index` (authuser slot, -1 for delegated) still used by index-based
@@ -267,6 +300,7 @@ function removeAccount(email: string): void {
   removed!.add(email); // persist so detection skips it from now on
   const profile = profiles.find((p) => p.email === email);
   if (!profile) return;
+  if (profile.kind === 'delegated') delegated?.remove(email); // stop persisting it
   const wasActive = manager?.activeKey() === keyOf(profile);
   profiles.splice(profiles.indexOf(profile), 1);
   seenEmails.delete(email);
@@ -682,6 +716,13 @@ function registerIpc(): void {
   });
   ipcMain.on(IPC.REDETECT, () => redetect());
   ipcMain.on(IPC.ADD_ACCOUNT, () => addAccount());
+  // Open the account switcher and offer the delegated mailboxes found there.
+  ipcMain.on(IPC.ADD_DELEGATED, () => {
+    void scanDelegatedSuggestions().then(pushDelegatedSuggestions);
+  });
+  ipcMain.on(IPC.ADD_DELEGATED_SUGGESTION, (_e, arg: { email: string; mailUrl: string }) =>
+    addDelegatedMailbox(arg.email, arg.mailUrl),
+  );
   ipcMain.on(IPC.SET_COLOR, (_e, arg: { email: string; color: string }) => {
     colors!.set(arg.email, arg.color);
     const p = profiles.find((x) => x.email === arg.email);
