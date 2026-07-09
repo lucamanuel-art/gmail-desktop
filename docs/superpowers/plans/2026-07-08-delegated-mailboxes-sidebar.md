@@ -492,6 +492,11 @@ git commit -m "feat: add delegated mailboxes via click-through capture"
 
 ### Task 8: Auto-scan the account switcher → *suggestions* (optional convenience)
 
+> **DROPPED — Gate 1 FAILED (Task 1 live spike, 2026-07-09).** The switcher is a
+> cross-origin `ogs.google.com` widget the mail view cannot read, and the
+> delegated URL is opaque. This task is a no-op; the feature ships
+> click-through-capture only. Left here for provenance.
+
 Only ships if **Gate 1 (Task 1) passed**. This is pure garnish on top of the click-through primary path (Task 7): it **never auto-adds** a mailbox — it only *suggests* discovered delegates for the user to opt into, preserving the user's curation. Layered selectors + health check; the store is only ever written by an explicit user action, never by the scan itself.
 
 **Files:**

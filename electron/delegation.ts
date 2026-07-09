@@ -1,17 +1,28 @@
 // The delegation contract: the exact Gmail URL forms, account-switcher DOM
 // shape and calendar redirect signals Google uses for delegated mailboxes.
 //
-// These are OBSERVED, not guessed (Google has shipped several forms over the
-// years). The pure, typed surface below is final; the concrete URL / DOM /
-// redirect patterns marked "OBSERVE" are filled in from a live CDP spike
-// against a real delegated mailbox (plan Task 1, Steps 1-4) and recorded in
-// docs/superpowers/specs/2026-07-08-delegated-mailboxes-sidebar-design.md.
+// OBSERVED LIVE (plan Task 1 spike, 2026-07-09, against a real delegate
+// "bart@abovomaxlead.nl" delegated to luca.manuel@abovomaxlead.nl; recorded in
+// docs/superpowers/specs/2026-07-08-delegated-mailboxes-sidebar-design.md):
+//
+//   - Delegated mail URL form:  https://mail.google.com/mail/u/<host>/d/<token>/
+//     e.g. https://mail.google.com/mail/u/0/d/AEoRXRT...EvLsatGZu6d_R/
+//     The <token> is OPAQUE — it cannot be derived from the delegate's email,
+//     which is why we adopt Google's own href verbatim and why click-through
+//     capture (not typed-email) is the primary add path (plan Task 7).
+//   - The switcher entry is an <a> in a cross-origin ogs.google.com One-Google
+//     widget, loaded lazily only after the avatar is clicked. Its text carries
+//     the delegate name + email + a localized "Gemachtigd"/"Delegated" badge.
+//   - GATE 1 = FAIL for a robust auto-scan: that widget is cross-origin to the
+//     mail view, so the app's executeJavaScript there cannot read it. Auto-scan
+//     (plan Task 8) is therefore dropped; the feature ships click-through only.
+//   - The locale-INDEPENDENT marker of a delegated mail URL is the "/d/<token>/"
+//     path segment (isDelegatedMailUrl below) — never the badge text.
 //
 // Constraints (see plan Global Constraints):
 //   - No OAuth/API — only the logged-in Google web session in embedded views.
-//   - Locale-independent — match structure / stable attributes / href only,
-//     never UI text (the user's Gmail is Dutch, and may be switched to any
-//     language). aria-label/title/textContent are localized and off-limits.
+//   - Locale-independent — match structure / href only, never UI text (the
+//     user's Gmail is Dutch, and may be switched to any language).
 //   - Adopt Google's own URLs verbatim — never construct a guessed one.
 
 /** A delegated mailbox as discovered from Google's account switcher. */
@@ -37,6 +48,22 @@ export function parseDelegatedEntries(
 /** The mail URL for a delegated entry — Google's own href, adopted verbatim. */
 export function delegatedMailUrl(entry: DelegatedEntry): string {
   return entry.mailUrl;
+}
+
+/**
+ * True when a URL is a delegated Gmail mailbox, i.e. matches the observed
+ * `/mail/u/<host>/d/<opaque-token>/` form — as opposed to a normal authuser
+ * `/mail/u/<n>/` inbox. Locale-independent (path structure only). Used by the
+ * click-through capture flow (plan Task 7) to validate that the URL the view
+ * landed on really is a delegated mailbox before registering it.
+ */
+export function isDelegatedMailUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === 'mail.google.com' && /^\/mail\/u\/\d+\/d\/[^/]+/.test(u.pathname);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -69,17 +96,14 @@ export function isCalendarNoAccessUrl(_finalUrl: string): boolean {
  * matched locale-independently through a layered selector chain
  * (stable id/data-* -> href pattern -> structural shape).
  *
- * This powers the best-effort auto-scan SUGGESTIONS only (plan Task 8), which
- * never auto-adds; the primary add path is click-through capture (Task 7) and
- * does not use this. It ships only if Gate 1 (Task 1, Step 2) passes.
- *
- * OBSERVE (plan Task 1, Steps 2-3): the actual selector chain. Until then this
- * returns an empty list so the auto-scan finds nothing (safe no-op) while the
- * primary click-through path and persistence work unaffected.
+ * GATE 1 FAILED in the Task 1 live spike: the switcher is a cross-origin
+ * ogs.google.com widget the mail view's executeJavaScript cannot read, so the
+ * auto-scan (plan Task 8) is DROPPED and this stays a no-op. Kept as a documented
+ * anchor: were Google ever to render the chooser same-origin, the delegated
+ * entries are `<a href*="/d/">` whose text carries the delegate email — but the
+ * primary click-through path (Task 7) does not depend on any of this.
  */
 export const SWITCHER_SCRAPE_JS = `(() => {
-  // OBSERVE: replace with the layered, locale-independent selector chain
-  // recorded during the Task 1 live spike. Structure / stable attributes /
-  // href only — never UI text, aria-label, title or textContent.
+  // No-op: Gate 1 failed (cross-origin One-Google widget). See doc above.
   return [];
 })()`;

@@ -75,6 +75,40 @@ kill switch, not a commitment to the full build:
 
 Record both answers in this section; they determine the scope actually built.
 
+### Task 0 findings (observed live 2026-07-09)
+
+Spike run against a real delegate **bart@abovomaxlead.nl** delegated to
+**luca.manuel@abovomaxlead.nl** (`/u/0/`), Dutch UI, via the CDP harness.
+
+1. **Delegated mail URL:** `https://mail.google.com/mail/u/<host>/d/<opaque-token>/`
+   — observed `https://mail.google.com/mail/u/0/d/AEoRXRT…EvLsatGZu6d_R/`. The
+   token is **opaque**: it cannot be derived from the delegate's email, so a
+   typed-email add is impossible and we must adopt Google's href verbatim. This
+   confirms **click-through capture as the primary (and only robust) add path**.
+2. **Switcher DOM shape:** the entry is an `<a>` inside a **cross-origin
+   `ogs.google.com` One-Google widget** that loads lazily only after the avatar
+   is clicked. Its text carries name + email + a localized badge
+   ("Gemachtigd" in NL, "Delegated" in EN). The **locale-independent** marker of
+   a delegated mailbox is the **`/d/<token>/` href segment** (`isDelegatedMailUrl`),
+   never the badge text.
+3. **Delegated Calendar:** none reachable for this delegate (Gmail delegation
+   doesn't grant calendar). No delegated-calendar URL or no-access redirect was
+   observable here, so `calendarUrl` defaults to `null` (mail-only). The probe
+   (design §3 / plan Task 9) stays, to be exercised if a delegate ever shares a
+   calendar.
+
+**GATE 1 — read switcher without a trusted click? → FAIL.** The switcher is a
+cross-origin `ogs.google.com` widget; the mail view's `executeJavaScript` cannot
+read it, and the URL is opaque anyway. **Auto-scan (plan Task 8) is dropped**;
+the feature ships **click-through-capture only**. (A programmatic `.click()` did
+open the widget, but its DOM is unreadable from the mail context.)
+
+**GATE 2 — do unread + notifications fire for a delegated inbox? → PENDING.**
+Not yet confirmable: it requires the delegated view running under the app's own
+preload, which the click-through capture path (Task 7) builds. To be recorded in
+Task 11. Strong prior it PASSES (the delegated mailbox is ordinary
+`mail.google.com` served in the same session with the same preload machinery).
+
 ## Design
 
 ### 1. Account identity model (the central change)
