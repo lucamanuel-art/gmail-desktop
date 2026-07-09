@@ -51,6 +51,7 @@ export interface AccountPref {
   zoom?: number;
   notify?: boolean;
   calendarNotify?: boolean;
+  badgeCount?: boolean;
 }
 export interface Prefs {
   window: { width: number; height: number; x?: number; y?: number; maximized: boolean };

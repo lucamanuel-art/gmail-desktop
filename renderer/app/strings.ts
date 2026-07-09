@@ -51,6 +51,8 @@ export interface UiStrings {
   mailToggleTitle: string;
   calendarToggle: string;
   calendarToggleTitle: string;
+  badgeToggle: string;
+  badgeToggleTitle: string;
   removeAccount: string;
   removeConfirmBefore: string; // text before the styled "+" in the confirm box
   removeConfirmAfter: string;
@@ -166,6 +168,8 @@ export const STRINGS_NORMAL: UiStrings = {
   mailToggleTitle: 'Mail notifications for this account',
   calendarToggle: 'Calendar',
   calendarToggleTitle: 'Calendar reminders for this account',
+  badgeToggle: 'Badge',
+  badgeToggleTitle: 'Count this mailbox in the taskbar unread badge',
   removeAccount: 'Remove account',
   removeConfirmBefore:
     'Remove this account from the app? It stays signed in with Google — re-add it later with the ',
@@ -243,6 +247,8 @@ export const STRINGS_RENE: UiStrings = {
   mailToggleTitle: 'Meldingen voor de post van deze meneer of mevrouw',
   calendarToggle: 'Agenda',
   calendarToggleTitle: 'Meldingen voor de agenda van deze meneer of mevrouw',
+  badgeToggle: 'Getal',
+  badgeToggleTitle: 'Tel de post van deze meneer of mevrouw mee in het getal op de knop',
   removeAccount: 'Weg ermee',
   removeConfirmBefore: 'Mag deze weg uit de app? Je kan hem later weer terug doen met de ',
   removeConfirmAfter: ' knop.',
