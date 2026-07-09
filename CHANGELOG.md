@@ -6,19 +6,18 @@ to [Semantic Versioning](https://semver.org/).
 ## [0.2.3] — 2026-07-09
 
 ### Toegevoegd
-- **Badge-teller per gedelegeerd postvak aan/uit.** In Instellingen → Accounts
-  heeft elk gedelegeerd postvak nu een "Badge"-vinkje. Zet je het uit, dan telt
-  de ongelezen post van dat postvak niet meer mee in het getal op het app-icoon
-  in de taakbalk. Standaard staat het aan (net als voorheen). Dit verandert
-  alleen het taakbalk-getal — meldingen en de teller in de zijbalk blijven
-  gewoon werken.
+- **Badge-teller per account aan/uit.** In Instellingen → Accounts heeft elk
+  account nu een "Badge"-vinkje. Zet je het uit, dan telt de ongelezen post van
+  dat account niet meer mee in het getal op het app-icoon in de taakbalk.
+  Standaard staat het aan (net als voorheen). Dit verandert alleen het
+  taakbalk-getal — meldingen en de teller in de zijbalk blijven gewoon werken.
 
 ### Added
-- **Per-delegated-mailbox taskbar badge toggle.** In Settings → Accounts, each
-  delegated mailbox now has a "Badge" checkbox. Turn it off and that mailbox's
-  unread mail no longer counts toward the number on the taskbar app icon.
-  Default is on (unchanged from before). This only affects the taskbar count —
-  notifications and the sidebar unread counter keep working as usual.
+- **Per-account taskbar badge toggle.** In Settings → Accounts, each account now
+  has a "Badge" checkbox. Turn it off and that account's unread mail no longer
+  counts toward the number on the taskbar app icon. Default is on (unchanged
+  from before). This only affects the taskbar count — notifications and the
+  sidebar unread counter keep working as usual.
 
 ## [0.2.2] — 2026-07-09
 

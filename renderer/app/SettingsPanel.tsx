@@ -523,17 +523,15 @@ export function SettingsPanel({
                         />
                         {S.calendarToggle}
                       </label>
-                      {p.kind === 'delegated' && (
-                        <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title={S.badgeToggleTitle}>
-                          <input
-                            type="checkbox"
-                            checked={prefs?.accounts?.[p.email]?.badgeCount !== false}
-                            onChange={(e) => window.desktop?.setAccountPref({ email: p.email, badgeCount: e.target.checked })}
-                            className="h-3.5 w-3.5 accent-blue-600"
-                          />
-                          {S.badgeToggle}
-                        </label>
-                      )}
+                      <label className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400" title={S.badgeToggleTitle}>
+                        <input
+                          type="checkbox"
+                          checked={prefs?.accounts?.[p.email]?.badgeCount !== false}
+                          onChange={(e) => window.desktop?.setAccountPref({ email: p.email, badgeCount: e.target.checked })}
+                          className="h-3.5 w-3.5 accent-blue-600"
+                        />
+                        {S.badgeToggle}
+                      </label>
                     </div>
                     <button
                       onClick={() => setConfirmEmail(p.email)}

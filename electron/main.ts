@@ -248,12 +248,12 @@ function pushProfiles(): void {
 function pushUnread(): void {
   mainWindow?.webContents.send(IPC.UNREAD_CHANGED, { ...unreadCounts });
 }
-// Delegated mailboxes the user has opted out of the taskbar badge. Owned
-// (authuser) accounts always count; only delegated entries are excludable.
+// Accounts the user has opted out of the taskbar badge — any account (owned or
+// delegated) whose badgeCount pref is off. Absent/true means it still counts.
 function excludedBadgeKeys(): Set<string> {
   const keys = new Set<string>();
   for (const p of profiles) {
-    if (p.kind === 'delegated' && prefs?.getAccount(p.email).badgeCount === false) {
+    if (prefs?.getAccount(p.email).badgeCount === false) {
       keys.add(keyOf(p));
     }
   }
