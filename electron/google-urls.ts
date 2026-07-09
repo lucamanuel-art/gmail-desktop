@@ -1,11 +1,11 @@
 import { SURFACES, SURFACE_CONFIG } from '../renderer/lib/surfaces';
 
 export function mailUrl(index: number): string {
-  return SURFACE_CONFIG.mail.url(index);
+  return SURFACE_CONFIG.mail.url({ kind: 'authuser', index });
 }
 
 export function calendarUrl(index: number): string {
-  return SURFACE_CONFIG.calendar.url(index);
+  return SURFACE_CONFIG.calendar.url({ kind: 'authuser', index });
 }
 
 // Gmail's focused single-message reading window lives under a /popout path.

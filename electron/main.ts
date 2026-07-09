@@ -6,6 +6,7 @@ import type { Tray } from 'electron';
 import { parseChangelog, type ChangelogVersion } from './changelog';
 import { ProfileViewManager, type Profile, type Surface } from './profile-view-manager';
 import { SURFACES } from '../renderer/lib/surfaces';
+import { accountKey, parseAccountKey, type AccountRef } from './account-ref';
 import { ColorStore } from './color-store';
 import { RemovedStore } from './removed-store';
 import { PrefsStore } from './prefs-store';
@@ -81,10 +82,26 @@ function registerAppProtocol(): void {
   });
 }
 
-function decorate(list: Profile[]): Profile[] {
+// --- account identity helpers ---
+// The view layer and IPC now route by accountKey; the authuser detection state
+// machine and the (unchanged) renderer still speak integer index. All accounts
+// are authuser today — delegated mailboxes arrive with the later tasks and
+// carry their own ref — so index <-> key is a clean bijection here.
+const authRef = (index: number): AccountRef => ({ kind: 'authuser', index });
+const keyOf = (p: Profile): string => accountKey(p.ref);
+const keyOfIndex = (index: number): string => accountKey(authRef(index));
+const authIdx = (p: Profile): number => (p.ref.kind === 'authuser' ? p.ref.index : -1);
+const idxOfKey = (key: string): number | null => {
+  const parsed = parseAccountKey(key);
+  return parsed.kind === 'authuser' ? parsed.index : null;
+};
+
+// Decorate with per-account prefs and a renderer-facing `index` (derived from
+// the ref) so the sidebar renderer and IPC stay unchanged for now.
+function decorate(list: Profile[]) {
   const withPrefs = list.map((p) => {
     const ap = prefs?.getAccount(p.email) ?? {};
-    return { ...p, order: ap.order, label: ap.label };
+    return { ...p, index: authIdx(p), order: ap.order, label: ap.label };
   });
   return sortByOrder(withPrefs);
 }
@@ -107,14 +124,14 @@ function clearProbeTimer(): void {
 
 function probe(index: number): void {
   probingIndex = index;
-  manager?.ensureView(index, 'mail', false); // hidden probe; identity arrives via onIdentity
+  manager?.ensureView(authRef(index), 'mail', false); // hidden probe; identity arrives via onIdentity
   clearProbeTimer();
   // Never auto-discard index 0: it is the visible primary/login view and may take
   // arbitrarily long to sign in. Only forward probes (1+) get the discard timeout.
   if (index > 0) {
     probeTimer = setTimeout(() => {
       // No identity within the timeout: no account at this index. Discard and stop.
-      manager?.discardView(index, 'mail');
+      manager?.discardView(keyOfIndex(index), 'mail');
       probeTimer = null;
       probingIndex = null;
     }, PROBE_TIMEOUT_MS);
@@ -125,7 +142,7 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
   // Ignore re-fired identity for an already-registered index: Gmail's SPA re-runs the
   // preload identity poll on full navigations, which would otherwise abort an in-flight
   // probe timer and spuriously advance/leak views.
-  if (profiles.some((p) => p.index === index)) return;
+  if (profiles.some((p) => authIdx(p) === index)) return;
 
   const email = identity?.email;
   const isVisibleAdd = visibleProbe === index;
@@ -138,8 +155,8 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
   if (!isVisibleAdd && email && removed!.has(email)) {
     clearProbeTimer();
     probingIndex = null;
-    manager?.discardView(index, 'mail');
-    if (manager?.activeIndex() == null && profiles[0]) switchSurface(profiles[0].index, 'mail');
+    manager?.discardView(keyOfIndex(index), 'mail');
+    if (manager?.activeKey() == null && profiles[0]) switchSurface(authIdx(profiles[0]), 'mail');
     probe(index + 1);
     return;
   }
@@ -150,8 +167,15 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
   if (decision.register && identity.email) {
     seenEmails.add(identity.email);
     const color = colors!.get(identity.email) ?? colorForIndex(index);
-    profiles.push({ index, email: identity.email, name: identity.name, avatarUrl: identity.avatarUrl, color });
-    profiles.sort((a, b) => a.index - b.index);
+    profiles.push({
+      ref: authRef(index),
+      kind: 'authuser',
+      email: identity.email,
+      name: identity.name,
+      avatarUrl: identity.avatarUrl,
+      color,
+    });
+    profiles.sort((a, b) => authIdx(a) - authIdx(b));
     pushProfiles();
     refreshNotifyAllowed();
     syncCalendarViews();
@@ -159,18 +183,18 @@ function onIdentity(index: number, identity: { email: string; name: string; avat
       // A freshly added account (via the "+" flow): keep it on screen.
       switchSurface(index, 'mail');
       visibleProbe = null;
-    } else if (manager?.activeIndex() == null) {
+    } else if (manager?.activeKey() == null) {
       // Nothing visible yet (e.g. the primary account was removed/skipped):
       // surface the first account we successfully register.
       switchSurface(index, 'mail');
     }
   } else if (index > 0) {
-    manager?.discardView(index, 'mail'); // duplicate/empty probe view
+    manager?.discardView(keyOfIndex(index), 'mail'); // duplicate/empty probe view
     if (visibleProbe === index) {
       // Add cancelled or a duplicate account: fall back to a real view so the
       // user isn't left staring at a torn-down blank surface.
       visibleProbe = null;
-      if (profiles[0]) switchSurface(profiles[0].index, 'mail');
+      if (profiles[0]) switchSurface(authIdx(profiles[0]), 'mail');
     }
   }
   if (!decision.stop) probe(index + 1);
@@ -180,20 +204,20 @@ function removeAccount(email: string): void {
   removed!.add(email); // persist so detection skips it from now on
   const profile = profiles.find((p) => p.email === email);
   if (!profile) return;
-  const idx = profile.index;
-  const wasActive = manager?.activeIndex() === idx;
+  const idx = authIdx(profile);
+  const wasActive = manager?.activeKey() === keyOf(profile);
   profiles.splice(profiles.indexOf(profile), 1);
   seenEmails.delete(email);
   delete unreadCounts[idx];
-  for (const surface of SURFACES) manager?.discardView(idx, surface);
+  for (const surface of SURFACES) manager?.discardView(keyOf(profile), surface);
   pushProfiles();
   pushUnread();
   applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
-  if (wasActive && profiles[0]) switchSurface(profiles[0].index, 'mail');
+  if (wasActive && profiles[0]) switchSurface(authIdx(profiles[0]), 'mail');
 }
 
 function switchSurface(index: number, surface: Surface): void {
-  manager?.show(index, surface);
+  manager?.show(authRef(index), surface);
   // A first switch to an app surface just created its view; gate it right away
   // (the app surfaces never notify in v1) instead of on the next 60s tick.
   refreshNotifyAllowed();
@@ -206,11 +230,11 @@ function startDetection(): void {
 function redetect(): void {
   clearProbeTimer();
   // Tear down a probe view still in flight so repeated re-detects don't orphan hidden views.
-  if (probingIndex !== null && !profiles.some((p) => p.index === probingIndex)) {
-    manager?.discardView(probingIndex, 'mail');
+  if (probingIndex !== null && !profiles.some((p) => authIdx(p) === probingIndex)) {
+    manager?.discardView(keyOfIndex(probingIndex), 'mail');
   }
   probingIndex = null;
-  const maxIndex = profiles.length ? Math.max(...profiles.map((p) => p.index)) : -1;
+  const maxIndex = profiles.length ? Math.max(...profiles.map((p) => authIdx(p))) : -1;
   probe(maxIndex + 1);
 }
 
@@ -219,13 +243,13 @@ function addAccount(): void {
   // view so the user can sign into a brand-new account. onIdentity registers it
   // once Gmail loads. No discard timer here — signing in can take a while.
   clearProbeTimer();
-  if (probingIndex !== null && !profiles.some((p) => p.index === probingIndex)) {
-    manager?.discardView(probingIndex, 'mail');
+  if (probingIndex !== null && !profiles.some((p) => authIdx(p) === probingIndex)) {
+    manager?.discardView(keyOfIndex(probingIndex), 'mail');
   }
-  const nextIndex = profiles.length ? Math.max(...profiles.map((p) => p.index)) + 1 : 0;
+  const nextIndex = profiles.length ? Math.max(...profiles.map((p) => authIdx(p))) + 1 : 0;
   probingIndex = nextIndex;
   visibleProbe = nextIndex;
-  manager?.ensureView(nextIndex, 'mail', true, addAccountUrl());
+  manager?.ensureView(authRef(nextIndex), 'mail', true, addAccountUrl());
 }
 
 let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -240,25 +264,28 @@ function scheduleSaveBounds(): void {
   saveBoundsTimer = setTimeout(saveWindowBounds, 400);
 }
 
-function handleInput(index: number, input: KeyInput): void {
+// The shortcut always acts on the currently active view (queried from the
+// manager), so the originating account identity isn't needed here.
+function handleInput(input: KeyInput): void {
   const action = resolveShortcut(input);
   if (!action) return;
   if (action.type === 'switch') {
-    const ordered = [...profiles].sort((a, b) => (a.order ?? a.index) - (b.order ?? b.index));
+    const ordered = [...profiles].sort((a, b) => (a.order ?? authIdx(a)) - (b.order ?? authIdx(b)));
     const target = ordered[action.n - 1];
-    if (target) switchSurface(target.index, 'mail');
+    if (target) switchSurface(authIdx(target), 'mail');
   } else if (action.type === 'compose') {
-    const active = manager?.activeIndex();
+    const activeKey = manager?.activeKey();
+    const active = activeKey ? idxOfKey(activeKey) : null;
     if (active != null) openCompose(active);
   } else if (action.type === 'zoom') {
     if (prefs?.getAll().reneMode) return; // Rene mode pins everything at 200%
-    const active = manager?.activeIndex();
-    if (active == null) return;
+    const activeKey = manager?.activeKey();
+    if (activeKey == null) return;
     const current = manager!.getActiveZoomLevel();
     const level = action.dir === 'reset' ? 0 : current + (action.dir === 'in' ? 0.5 : -0.5);
     const clamped = Math.max(-3, Math.min(3, level));
-    manager!.setZoomForIndex(active, clamped);
-    const email = profiles.find((p) => p.index === active)?.email;
+    manager!.setZoomForKey(activeKey, clamped);
+    const email = profiles.find((p) => keyOf(p) === activeKey)?.email;
     if (email) prefs!.setAccount(email, { zoom: clamped });
   }
 }
@@ -271,7 +298,7 @@ function applyReneZoom(): void {
   const on = prefs.getAll().reneMode;
   mainWindow.webContents.setZoomFactor(on ? RENE_ZOOM_FACTOR : 1);
   for (const p of profiles) {
-    manager?.setZoomForIndex(p.index, on ? RENE_ZOOM_LEVEL : prefs.getAccount(p.email).zoom ?? 0);
+    manager?.setZoomForKey(keyOf(p), on ? RENE_ZOOM_LEVEL : prefs.getAccount(p.email).zoom ?? 0);
   }
   manager?.relayout();
 }
@@ -291,7 +318,7 @@ function refreshNotifyAllowed(): void {
   }
   for (const profile of profiles) {
     for (const surface of SURFACES) {
-      manager?.pushNotifyAllowed(profile.index, surface, notificationsAllowed(p, profile.email, now, surface));
+      manager?.pushNotifyAllowed(keyOf(profile), surface, notificationsAllowed(p, profile.email, now, surface));
     }
   }
 }
@@ -309,9 +336,9 @@ function syncCalendarViews(): void {
   for (const profile of profiles) {
     const enabled = prefs.getAccount(profile.email).calendarNotify === true;
     if (enabled) {
-      manager.ensureView(profile.index, 'calendar', false);
-    } else if (!manager.isShowing(profile.index, 'calendar')) {
-      manager.discardView(profile.index, 'calendar');
+      manager.ensureView(profile.ref, 'calendar', false);
+    } else if (!manager.isShowing(keyOf(profile), 'calendar')) {
+      manager.discardView(keyOf(profile), 'calendar');
     }
   }
   refreshNotifyAllowed(); // push flags to any newly created calendar views
@@ -339,12 +366,15 @@ function createWindow(): void {
   manager = new ProfileViewManager(
     mainWindow,
     PRELOAD_PATH,
-    (index, count) => {
-      unreadCounts[index] = count;
+    (accountKey, count) => {
+      const idx = idxOfKey(accountKey);
+      if (idx == null) return;
+      unreadCounts[idx] = count;
       pushUnread();
       applyBadge(unreadCounts as unknown as Record<string, number>, (n) => app.setBadgeCount(n));
     },
-    (index, surface, threadId) => {
+    (accountKey, surface, threadId) => {
+      const idx = idxOfKey(accountKey);
       // The main window may have been torn down (some setups actually destroy it
       // on close rather than hiding to the tray) while hidden views still fire
       // events. Rebuild it so a notification click brings the app back instead of
@@ -358,15 +388,15 @@ function createWindow(): void {
       // The app opens the clicked thread itself; Gmail's own click handler may
       // fire window.open with the same thread right after — suppress that
       // (genuine pop-out windows are exempted in windowOpenAction).
-      if (threadId && surface === 'mail') manager?.markNotificationClickHandled(index, 'mail');
+      if (threadId && surface === 'mail') manager?.markNotificationClickHandled(accountKey, 'mail');
       const windowMode = prefs?.getAll().notificationOpen === 'window';
       // "Open in a new window" mode: open the thread in the mail view so Gmail's
       // own pop-out button exists, then trigger it for a focused reading window.
       // Fall back to a full thread window if the button can't be found.
       if (threadId && surface === 'mail' && windowMode) {
-        manager?.openMailThread(index, threadId);
-        void manager?.popOutThread(index).then((ok) => {
-          if (!ok) openFullThreadWindow(index, threadId);
+        manager?.openMailThread(accountKey, threadId);
+        void manager?.popOutThread(accountKey).then((ok) => {
+          if (!ok && idx != null) openFullThreadWindow(idx, threadId);
         });
         return;
       }
@@ -379,15 +409,18 @@ function createWindow(): void {
         settingsPanelOpen = false;
         mainWindow?.webContents.send(IPC.SETTINGS_FORCE_CLOSE);
       }
-      switchSurface(index, surface);
+      if (idx != null) switchSurface(idx, surface);
       // "In the app" mode: also open the clicked thread in that mail view.
-      if (threadId && surface === 'mail') manager?.openMailThread(index, threadId);
+      if (threadId && surface === 'mail') manager?.openMailThread(accountKey, threadId);
     },
-    (index, identity) => onIdentity(index, identity),
-    (index, input) => handleInput(index, input),
-    (index) => {
+    (accountKey, identity) => {
+      const idx = idxOfKey(accountKey);
+      if (idx != null) onIdentity(idx, identity);
+    },
+    (_accountKey, input) => handleInput(input),
+    (accountKey) => {
       if (prefs?.getAll().reneMode) return RENE_ZOOM_LEVEL;
-      const email = profiles.find((p) => p.index === index)?.email;
+      const email = profiles.find((p) => keyOf(p) === accountKey)?.email;
       return email ? prefs!.getAccount(email).zoom ?? 0 : 0;
     },
     () => prefs?.getAll().notificationOpen ?? 'app',
@@ -424,8 +457,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.on('before-input-event', (_e, input) => {
-    const active = manager?.activeIndex() ?? 0;
-    handleInput(active, input as unknown as KeyInput);
+    handleInput(input as unknown as KeyInput);
   });
 }
 
