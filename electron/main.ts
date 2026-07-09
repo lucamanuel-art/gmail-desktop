@@ -772,8 +772,15 @@ function registerIpc(): void {
   ipcMain.on(IPC.REDETECT, () => redetect());
   ipcMain.on(IPC.ADD_ACCOUNT, () => addAccount());
   // Open the account switcher and offer the delegated mailboxes found there.
+  // The "+" menu overlay hid the content view, but the switcher scrape needs
+  // the /u0 mail view painted to open its account chooser — so show it for the
+  // scan, then re-hide it so the menu (now with results) stays visible.
   ipcMain.on(IPC.ADD_DELEGATED, () => {
-    void scanDelegatedSuggestions().then(pushDelegatedSuggestions);
+    manager?.show(authRef(0), 'mail');
+    void scanDelegatedSuggestions().then((s) => {
+      manager?.hideAll();
+      pushDelegatedSuggestions(s);
+    });
   });
   ipcMain.on(IPC.ADD_DELEGATED_SUGGESTION, (_e, arg: { email: string; mailUrl: string }) =>
     addDelegatedMailbox(arg.email, arg.mailUrl),
