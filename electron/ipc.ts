@@ -25,6 +25,7 @@ export const IPC = {
   SET_THEME: 'prefs:theme', // send('system'|'light'|'dark')
   SET_NOTIFICATION_OPEN: 'prefs:notification-open', // send('app'|'window')
   SET_RENE_MODE: 'prefs:rene-mode', // send(boolean) — settings-page easter egg toggle
+  SET_DEFAULT_MAIL: 'mail:set-default', // send() — (re)claim the OS mailto: default
   CHANGELOG_GET: 'changelog:get', // invoke() -> ChangelogVersion[] — parsed CHANGELOG.md
   // main -> renderer (sidebar)
   PROFILES_CHANGED: 'profiles:changed', // Profile[]
@@ -34,6 +35,7 @@ export const IPC = {
   SETTINGS_FORCE_CLOSE: 'settings:force-close',
   SETTINGS_FORCE_OPEN: 'settings:force-open', // main -> renderer: open the settings panel (e.g. tray "Check for updates")
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
+  MAIL_DEFAULT_STATUS: 'mail:default-status', // main -> renderer: boolean (is default mailto client)
   NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(boolean)
 } as const;
 

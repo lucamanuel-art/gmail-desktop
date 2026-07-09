@@ -11,6 +11,10 @@ export interface UiStrings {
 
   sectionGeneral: string;
   autoStart: string;
+  setDefaultMail: string;
+  setDefaultMailHint: string;
+  isDefaultMail: string;
+  notDefaultMail: string;
   theme: string;
   themeSystem: string;
   themeLight: string;
@@ -125,6 +129,10 @@ export const STRINGS_NORMAL: UiStrings = {
 
   sectionGeneral: 'General',
   autoStart: 'Start Gmail Desktop when I sign in',
+  setDefaultMail: 'Set as default mail app',
+  setDefaultMailHint: 'Windows may ask you to confirm the change.',
+  isDefaultMail: 'This is your default mail app',
+  notDefaultMail: 'Not your default mail app',
   theme: 'Theme',
   themeSystem: 'System',
   themeLight: 'Light',
@@ -204,6 +212,10 @@ export const STRINGS_RENE: UiStrings = {
 
   sectionGeneral: 'Gewoon',
   autoStart: 'De app gaat zelf aan',
+  setDefaultMail: 'Maak dit je standaard-mailprogramma',
+  setDefaultMailHint: 'Windows vraagt misschien of je het zeker weet.',
+  isDefaultMail: 'Dit is je standaard-mailprogramma',
+  notDefaultMail: 'Nog niet je standaard-mailprogramma',
   theme: 'Kleur',
   themeSystem: 'De computer kiest',
   themeLight: 'Licht',

@@ -90,6 +90,8 @@ interface DesktopBridge {
   setTheme(theme: 'system' | 'light' | 'dark'): void;
   setNotificationOpen(v: 'app' | 'window'): void;
   setReneMode(v: boolean): void;
+  setDefaultMail(): void;
+  onDefaultMailStatus(cb: (isDefault: boolean) => void): void;
   getChangelog(): Promise<ChangelogVersion[]>;
 }
 
@@ -177,6 +179,7 @@ export default function Sidebar() {
   const S = getStrings(prefs?.reneMode === true);
   // Account key whose waffle (Google apps) flyout is expanded; one at a time.
   const [appsOpenFor, setAppsOpenFor] = useState<string | null>(null);
+  const [isDefaultMail, setIsDefaultMail] = useState(false);
 
   useEffect(() => {
     const bridge = window.desktop;
@@ -199,6 +202,7 @@ export default function Sidebar() {
     bridge.onSettingsForceOpen(() => setSettingsOpen(true));
     bridge.onUpdateStatus(setUpdate);
     bridge.onPrefsChanged((p) => setPrefs(p as Prefs));
+    bridge.onDefaultMailStatus(setIsDefaultMail);
   }, []);
 
   // The "+" menu extends over the content area; hide/show the native content
@@ -486,6 +490,8 @@ export default function Sidebar() {
           prefs={prefs}
           onSetAutoStart={(v) => window.desktop?.setAutoStart(v)}
           onSetNotifications={(a) => window.desktop?.setNotifications(a)}
+          isDefaultMail={isDefaultMail}
+          onSetDefaultMail={() => window.desktop?.setDefaultMail()}
         />
       )}
     </div>

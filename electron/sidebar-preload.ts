@@ -61,5 +61,9 @@ contextBridge.exposeInMainWorld('desktop', {
   setTheme: (theme: 'system' | 'light' | 'dark'): void => ipcRenderer.send(IPC.SET_THEME, theme),
   setNotificationOpen: (v: 'app' | 'window'): void => ipcRenderer.send(IPC.SET_NOTIFICATION_OPEN, v),
   setReneMode: (v: boolean): void => ipcRenderer.send(IPC.SET_RENE_MODE, v),
+  setDefaultMail: (): void => ipcRenderer.send(IPC.SET_DEFAULT_MAIL),
+  onDefaultMailStatus: (cb: (isDefault: boolean) => void): void => {
+    ipcRenderer.on(IPC.MAIL_DEFAULT_STATUS, (_e, v) => cb(Boolean(v)));
+  },
   getChangelog: (): Promise<unknown> => ipcRenderer.invoke(IPC.CHANGELOG_GET),
 });

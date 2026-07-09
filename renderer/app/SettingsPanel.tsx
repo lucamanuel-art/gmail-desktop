@@ -148,6 +148,8 @@ export function SettingsPanel({
   prefs,
   onSetAutoStart,
   onSetNotifications,
+  isDefaultMail,
+  onSetDefaultMail,
 }: {
   profiles: Profile[];
   onClose: () => void;
@@ -162,6 +164,8 @@ export function SettingsPanel({
     dnd: boolean;
     quietHours: { enabled: boolean; start: string; end: string };
   }) => void;
+  isDefaultMail: boolean;
+  onSetDefaultMail: () => void;
 }) {
   const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
@@ -287,6 +291,21 @@ export function SettingsPanel({
               className="h-4 w-4 accent-blue-600"
             />
           </label>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-sm">{S.setDefaultMail}</span>
+              <span className="text-xs text-neutral-400">
+                {isDefaultMail ? S.isDefaultMail : S.notDefaultMail} — {S.setDefaultMailHint}
+              </span>
+            </div>
+            <button
+              onClick={onSetDefaultMail}
+              disabled={isDefaultMail}
+              className="shrink-0 rounded bg-neutral-200 px-3 py-1 text-sm hover:bg-neutral-300 disabled:opacity-50 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+            >
+              {S.setDefaultMail}
+            </button>
+          </div>
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-sm">{S.theme}</span>
             <select

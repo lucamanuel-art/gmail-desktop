@@ -24,6 +24,7 @@ import { shouldHideOnClose, createTray, updateTrayMenu, type TrayState, type Tra
 import { autoUpdater } from 'electron-updater';
 import { resolveShortcut, type KeyInput } from './shortcuts';
 import { openCompose, openFullThreadWindow } from './compose-window';
+import { parseMailto, extractMailtoFromArgv } from './mailto';
 import { sortByOrder } from './account-order';
 import { notificationsAllowed } from './notification-policy';
 import { updateCheckPopup } from './update-popup';
@@ -69,6 +70,7 @@ let settingsPanelOpen = false;
 let updateRequested = false; // user pressed "Update now" → auto-install once downloaded
 let pendingTrayUpdateCheck = false; // a check started from the tray → announce the result in a popup
 let lastUpdateStatus: Record<string, unknown> = { state: 'idle' };
+let pendingMailto: string | null = null; // a mailto arrived before an inbox was live
 
 const SESSION_PARTITION = 'persist:google';
 
@@ -262,6 +264,9 @@ function excludedBadgeKeys(): Set<string> {
 function pushPrefs(): void {
   if (prefs) mainWindow?.webContents.send(IPC.PREFS_CHANGED, prefs.getAll());
 }
+function pushDefaultMailStatus(): void {
+  mainWindow?.webContents.send(IPC.MAIL_DEFAULT_STATUS, app.isDefaultProtocolClient('mailto'));
+}
 
 function clearProbeTimer(): void {
   if (probeTimer) {
@@ -379,6 +384,55 @@ function showAccount(ref: AccountRef, surface: Surface): void {
   // A first switch to an app surface just created its view; gate it right away
   // (the app surfaces never notify in v1) instead of on the next 60s tick.
   refreshNotifyAllowed();
+  flushPendingMailto(); // an inbox is now live — run any queued mailto
+}
+
+// Picks the authuser index to compose from for an incoming mailto. One account →
+// that account; several → a native chooser (labels from prefs/name/email); none
+// or cancelled → null.
+function chooseComposeAccount(): number | null {
+  const authusers = profiles.filter((p) => p.ref.kind === 'authuser');
+  if (authusers.length === 0) return null;
+  if (authusers.length === 1) return authIdx(authusers[0]);
+  const labels = authusers.map((p) => prefs?.getAccount(p.email).label ?? p.name ?? p.email);
+  const cancelId = labels.length;
+  const chosen = dialog.showMessageBoxSync(mainWindow!, {
+    type: 'question',
+    title: 'New message',
+    message: 'Send from which account?',
+    buttons: [...labels, 'Cancel'],
+    cancelId,
+    defaultId: 0,
+  });
+  return chosen === cancelId ? null : authIdx(authusers[chosen]);
+}
+
+// Focuses the window, then composes from the chosen account. If no account/mail
+// view is ready yet (e.g. cold start still logging in), queues until one is.
+function dispatchMailto(mailtoUrl: string): void {
+  const fields = parseMailto(mailtoUrl);
+  if (!fields) return;
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+  const ready = manager?.activeKey() != null && profiles.some((p) => p.ref.kind === 'authuser');
+  if (!ready) {
+    pendingMailto = mailtoUrl;
+    return;
+  }
+  const index = chooseComposeAccount();
+  if (index == null) return;
+  openCompose(index, fields);
+}
+
+function flushPendingMailto(): void {
+  if (!pendingMailto) return;
+  if (manager?.activeKey() == null) return; // still not ready
+  const url = pendingMailto;
+  pendingMailto = null;
+  dispatchMailto(url);
 }
 // Authuser convenience used by the index-based detection state machine.
 function switchSurface(index: number, surface: Surface): void {
@@ -595,6 +649,7 @@ function createWindow(): void {
     loadDelegatedProfiles(); // surface persisted delegated mailboxes immediately
     pushProfiles(); // re-push on any (re)load so the sidebar repopulates
     pushPrefs();
+    pushDefaultMailStatus();
     if (!delegatedScanStarted) {
       delegatedScanStarted = true;
       // Delay so the /u/0 mail view is loaded before we scrape its switcher.
@@ -821,6 +876,10 @@ function registerIpc(): void {
     else if (!settingsPanelOpen) manager?.showActive();
   });
   ipcMain.on(IPC.SET_AUTO_START, (_e, v: boolean) => setAutoStart(v));
+  ipcMain.on(IPC.SET_DEFAULT_MAIL, () => {
+    app.setAsDefaultProtocolClient('mailto');
+    pushDefaultMailStatus();
+  });
   ipcMain.on(IPC.SET_SNOOZE, (_e, minutes: number | null) => setSnooze(minutes));
   ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean }) => {
     const patch: Record<string, unknown> = {};
@@ -870,13 +929,23 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_e, argv) => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.focus();
+    const url = extractMailtoFromArgv(argv);
+    if (url) dispatchMailto(url);
   });
 }
+
+// macOS delivers mailto: via this event (both cold and while running); register
+// it before whenReady so a launch-time URL isn't missed. dispatchMailto queues
+// itself if the app isn't ready yet.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  dispatchMailto(url);
+});
 
 app.whenReady().then(() => {
   if (!gotTheLock) return; // a primary instance is already running
@@ -884,7 +953,10 @@ app.whenReady().then(() => {
   registerAppProtocol();
   setupNotifications();
   registerIpc();
+  app.setAsDefaultProtocolClient('mailto');
   createWindow();
+  const initialMailto = extractMailtoFromArgv(process.argv);
+  if (initialMailto) pendingMailto = initialMailto; // flushed once an inbox is live
   startNotifyTimer();
   app.setLoginItemSettings({ openAtLogin: prefs!.getAll().autoStart });
   tray = createTray(ICON_PATH, getTrayState());
