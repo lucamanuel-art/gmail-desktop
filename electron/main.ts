@@ -142,21 +142,58 @@ function loadDelegatedProfiles(): void {
   }
 }
 
-// Scan the /u/0 account switcher for delegated mailboxes to offer as
-// suggestions: {email, mailUrl} not already owned, removed, or present.
+// Scan the /u/0 account switcher (hidden view) for delegated mailboxes.
 // Best-effort (scrapes Google's ogs widget) — returns [] on any failure.
-async function scanDelegatedSuggestions(): Promise<Array<{ email: string; mailUrl: string }>> {
+async function scanSwitcherEntries(): Promise<Array<{ email: string; mailUrl: string }>> {
   if (!manager) return [];
   const raw = await manager.scrapeSwitcher(keyOfIndex(0), SWITCHER_SCRAPE_JS).catch(() => []);
-  const entries = parseDelegatedEntries(raw);
+  return parseDelegatedEntries(raw).map((e) => ({ email: e.email, mailUrl: e.mailUrl }));
+}
+
+// New delegates from the switcher not already owned, removed, or present.
+function suggestableDelegates(
+  entries: Array<{ email: string; mailUrl: string }>,
+): Array<{ email: string; mailUrl: string }> {
   const removedKeys = removed?.list().map((e) => `d:${e.toLowerCase()}`) ?? [];
   return planDelegated(entries, [...seenEmails], removedKeys)
     .filter((e) => !profiles.some((p) => p.email.toLowerCase() === e.email))
     .map((e) => ({ email: e.email, mailUrl: e.mailUrl }));
 }
 
+async function scanDelegatedSuggestions(): Promise<Array<{ email: string; mailUrl: string }>> {
+  return suggestableDelegates(await scanSwitcherEntries());
+}
+
 function pushDelegatedSuggestions(suggestions: Array<{ email: string; mailUrl: string }>): void {
   mainWindow?.webContents.send(IPC.DELEGATED_SUGGESTIONS, { suggestions });
+}
+
+// On launch: re-scan the switcher (hidden), refresh persisted /d/ URLs whose
+// opaque token rotated (so stored mailboxes keep opening), and offer any newly
+// discovered delegates as suggestions. Health check: a scan that finds fewer
+// than we already hold is treated as "scrape probably broke" — we keep the
+// store intact and skip refresh/suggestions rather than act on the emptiness.
+let delegatedScanStarted = false;
+async function refreshAndSuggestDelegated(): Promise<void> {
+  if (!delegated || !manager) return;
+  const entries = await scanSwitcherEntries();
+  const stored = delegated.list();
+  if (entries.length < stored.length) return; // likely broken scrape — don't touch anything
+  const freshByEmail = new Map(entries.map((e) => [e.email.toLowerCase(), e.mailUrl]));
+  let changed = false;
+  for (const d of stored) {
+    const fresh = freshByEmail.get(d.email.toLowerCase());
+    if (!fresh || fresh === d.mailUrl) continue;
+    delegated.upsert({ ...d, mailUrl: fresh }); // refresh the rotated token
+    const p = profiles.find((x) => x.kind === 'delegated' && x.email.toLowerCase() === d.email.toLowerCase());
+    if (p && p.ref.kind === 'delegated') {
+      for (const s of SURFACES) manager.discardView(keyOf(p), s); // drop stale views; reload fresh on next show
+      p.ref = { ...p.ref, mailUrl: fresh };
+      changed = true;
+    }
+  }
+  if (changed) pushProfiles();
+  if (entries.length > 0) pushDelegatedSuggestions(suggestableDelegates(entries));
 }
 
 // Register a delegated mailbox (from click-through pick or an accepted
@@ -534,6 +571,11 @@ function createWindow(): void {
     loadDelegatedProfiles(); // surface persisted delegated mailboxes immediately
     pushProfiles(); // re-push on any (re)load so the sidebar repopulates
     pushPrefs();
+    if (!delegatedScanStarted) {
+      delegatedScanStarted = true;
+      // Delay so the /u/0 mail view is loaded before we scrape its switcher.
+      setTimeout(() => void refreshAndSuggestDelegated(), 7000);
+    }
     applyReneZoom(); // a (re)load resets the renderer's zoom factor
     mainWindow?.webContents.send(IPC.UPDATE_STATUS, { ...lastUpdateStatus, currentVersion: app.getVersion() });
     if (!detectionStarted) {
