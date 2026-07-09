@@ -13,9 +13,12 @@
 //   - The switcher entry is an <a> in a cross-origin ogs.google.com One-Google
 //     widget, loaded lazily only after the avatar is clicked. Its text carries
 //     the delegate name + email + a localized "Gemachtigd"/"Delegated" badge.
-//   - GATE 1 = FAIL for a robust auto-scan: that widget is cross-origin to the
-//     mail view, so the app's executeJavaScript there cannot read it. Auto-scan
-//     (plan Task 8) is therefore dropped; the feature ships click-through only.
+//   - GATE 1 = PASS but fragile: a programmatic click opens the widget, and its
+//     entries are readable from the ogs.google.com FRAME's own context (Electron
+//     WebFrameMain.executeJavaScript on the subframe — the cross-origin wall only
+//     blocks the mail view's OWN executeJavaScript). Auto-detect therefore ships
+//     as best-effort SUGGESTIONS (plan Task 8), never load-bearing; click-through
+//     capture (Task 7) is primary and the durable fallback.
 //   - The locale-INDEPENDENT marker of a delegated mail URL is the "/d/<token>/"
 //     path segment (isDelegatedMailUrl below) — never the badge text.
 //
@@ -90,20 +93,43 @@ export function isCalendarNoAccessUrl(_finalUrl: string): boolean {
 }
 
 /**
- * In-page JS (run via WebContents.executeJavaScript in the /u/0/ mail view)
- * that reads Google's account switcher and returns
- * `Array<{ email: string, href: string }>` for the delegated entries only,
- * matched locale-independently through a layered selector chain
- * (stable id/data-* -> href pattern -> structural shape).
+ * In-page JS to run INSIDE the ogs.google.com One-Google widget frame (via
+ * Electron `WebFrameMain.executeJavaScript`, NOT the mail view's own
+ * executeJavaScript, which is walled off cross-origin). Returns
+ * `Array<{ email, href }>` for the delegated switcher entries, matched
+ * locale-independently by the `/mail/u/<n>/d/<token>/` href form (never the
+ * localized "Gemachtigd"/"Delegated" badge).
  *
- * GATE 1 FAILED in the Task 1 live spike: the switcher is a cross-origin
- * ogs.google.com widget the mail view's executeJavaScript cannot read, so the
- * auto-scan (plan Task 8) is DROPPED and this stays a no-op. Kept as a documented
- * anchor: were Google ever to render the chooser same-origin, the delegated
- * entries are `<a href*="/d/">` whose text carries the delegate email — but the
- * primary click-through path (Task 7) does not depend on any of this.
+ * The email is read from the anchor's LEAF element whose whole trimmed text is
+ * exactly an email address (observed: the entry renders name/badge/email as
+ * separate divs; the anchor's concatenated textContent has no delimiters, so a
+ * regex over it would swallow adjacent words into the local-part). Powers the
+ * best-effort auto-detect SUGGESTIONS (plan Task 8); the primary click-through
+ * path (Task 7) does not use it. Returns [] if the widget isn't present or no
+ * clean email leaf is found, so callers degrade silently.
  */
 export const SWITCHER_SCRAPE_JS = `(() => {
-  // No-op: Gate 1 failed (cross-origin One-Google widget). See doc above.
-  return [];
+  var emailRe = /^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$/i;
+  var out = [];
+  var seen = {};
+  var anchors = document.querySelectorAll('a[href]');
+  for (var i = 0; i < anchors.length; i++) {
+    var a = anchors[i];
+    var href;
+    try { href = new URL(a.href, location.href).href; } catch (e) { continue; }
+    var path;
+    try { path = new URL(href).pathname; } catch (e) { continue; }
+    if (!/^\\/mail\\/u\\/\\d+\\/d\\/[^/]+/.test(path)) continue;
+    var email = null;
+    var leaves = a.querySelectorAll('*');
+    for (var j = 0; j < leaves.length; j++) {
+      if (leaves[j].children.length) continue;
+      var txt = (leaves[j].textContent || '').trim();
+      if (emailRe.test(txt)) { email = txt.toLowerCase(); break; }
+    }
+    if (!email || seen[email]) continue;
+    seen[email] = 1;
+    out.push({ email: email, href: href });
+  }
+  return out;
 })()`;

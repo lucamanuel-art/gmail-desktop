@@ -490,22 +490,24 @@ git commit -m "feat: add delegated mailboxes via click-through capture"
 
 ---
 
-### Task 8: Auto-scan the account switcher → *suggestions* (optional convenience)
+### Task 8: Auto-detect the account switcher → *suggestions* (best-effort convenience)
 
-> **DROPPED — Gate 1 FAILED (Task 1 live spike, 2026-07-09).** The switcher is a
-> cross-origin `ogs.google.com` widget the mail view cannot read, and the
-> delegated URL is opaque. This task is a no-op; the feature ships
-> click-through-capture only. Left here for provenance.
+> **Gate 1 PASSED but fragile (Task 1 live spike, 2026-07-09).** The switcher is
+> a cross-origin `ogs.google.com` widget, but a programmatic click opens it and
+> its delegated `{email, href}` entries are readable from that frame's own
+> context (Electron `WebFrameMain.executeJavaScript` on the subframe). User chose
+> to ship this as suggestions. Fragile: depends on Google's internal widget
+> markup, so it's convenience only — never load-bearing.
 
-Only ships if **Gate 1 (Task 1) passed**. This is pure garnish on top of the click-through primary path (Task 7): it **never auto-adds** a mailbox — it only *suggests* discovered delegates for the user to opt into, preserving the user's curation. Layered selectors + health check; the store is only ever written by an explicit user action, never by the scan itself.
+Pure garnish on top of the click-through primary path (Task 7): it **never auto-adds** a mailbox — it only *suggests* discovered delegates for the user to opt into, preserving the user's curation. Health check; the store is only ever written by an explicit user action, never by the scan itself.
 
 **Files:**
 - Modify: `electron/main.ts`, `renderer/app/page.tsx` (suggestion surface in the "+" menu)
-- Uses: `SWITCHER_SCRAPE_JS`, `parseDelegatedEntries` (Task 1); `planDelegated` (Task 4); `mergeScan` health check + `DelegatedStore` (Task 6).
+- Uses: `SWITCHER_SCRAPE_JS`, `parseDelegatedEntries`, `isDelegatedMailUrl` (Task 1); `planDelegated` (Task 4); `mergeScan` health check + `DelegatedStore` (Task 6).
 
-- [ ] **Step 1: Scan for suggestions after authuser detection**
+- [ ] **Step 1: Open the switcher and scrape its frame after authuser detection**
 
-In the `/u/0/` mail view, `executeJavaScript(SWITCHER_SCRAPE_JS)`, pass through `parseDelegatedEntries`, then `planDelegated(entries, knownAuthuserEmails, removedStore.keys())` to drop owned/removed/duplicate and any already in `DelegatedStore`. Surface the survivors as **suggestions** in the "+" menu ("Found these delegated mailboxes — add?"), each a one-click opt-in that reuses the Task 7 capture/upsert path. Use `mergeScan(store.list(), scanned)` only for its **health check**: when `healthOk === false` (scan returned fewer than we hold), surface a non-fatal "couldn't refresh delegated accounts" hint and show no suggestions — never prune, never auto-add.
+In the `/u/0/` mail view, programmatically click the avatar (locale-independent selector — the account link, not text) to load the One-Google widget; find the `ogs.google.com` subframe via `webContents.mainFrame.framesInSubtree`; run `frame.executeJavaScript(SWITCHER_SCRAPE_JS)` to read `Array<{email, href}>` for anchors matching the `/d/<token>/` delegated form (`isDelegatedMailUrl`, locale-independent — never the "Gemachtigd"/"Delegated" badge text). Pass through `parseDelegatedEntries`, then `planDelegated(entries, knownAuthuserEmails, removedStore.keys())` to drop owned/removed/duplicate and any already in `DelegatedStore`. Surface survivors as **suggestions** in the "+" menu ("Found these delegated mailboxes — add?"), each a one-click opt-in reusing the Task 7 upsert path. Use `mergeScan(store.list(), scanned)` only for its **health check**: when `healthOk === false`, surface a non-fatal "couldn't refresh delegated accounts" hint and show no suggestions — never prune, never auto-add. If the widget/frame can't be found or read, degrade silently (click-through still works).
 
 - [ ] **Step 2: Live smoke via CDP**
 

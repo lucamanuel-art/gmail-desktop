@@ -97,11 +97,19 @@ Spike run against a real delegate **bart@abovomaxlead.nl** delegated to
    (design §3 / plan Task 9) stays, to be exercised if a delegate ever shares a
    calendar.
 
-**GATE 1 — read switcher without a trusted click? → FAIL.** The switcher is a
-cross-origin `ogs.google.com` widget; the mail view's `executeJavaScript` cannot
-read it, and the URL is opaque anyway. **Auto-scan (plan Task 8) is dropped**;
-the feature ships **click-through-capture only**. (A programmatic `.click()` did
-open the widget, but its DOM is unreadable from the mail context.)
+**GATE 1 — read switcher without a trusted click? → PASS (fragile).** A
+*programmatic* `.click()` (no trusted gesture) opens the One-Google widget, and
+its delegated entries — `{email, href}` including the opaque `/d/` URL — are
+readable from the `ogs.google.com` frame's own context (in Electron via
+`WebFrameMain.executeJavaScript` on the subframe, which the cross-origin wall
+does not block; the mail view's *own* `executeJavaScript` cannot, which is what
+initially looked like a fail). So auto-detection is feasible but depends on
+Google's internal widget markup (obfuscated, churned) and on timing the lazily
+loaded frame. **Decision (user, 2026-07-09): ship auto-detect as best-effort
+SUGGESTIONS** the user one-click accepts (plan Task 8) — never auto-adding, so it
+can't fight curation — with click-through capture (Task 7) as the primary path
+and durable fallback, and persistence keeping known mailboxes when the scrape
+eventually breaks.
 
 **GATE 2 — do unread + notifications fire for a delegated inbox? → PENDING.**
 Not yet confirmable: it requires the delegated view running under the app's own
