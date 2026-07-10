@@ -5,11 +5,24 @@ to [Semantic Versioning](https://semver.org/).
 
 ## [0.2.4] — 2026-07-10
 
+### Toegevoegd
+- **Melding bij een nieuwe update.** Zodra er een nieuwe versie klaarstaat, krijg
+  je een melding op je bureaublad. Klik erop en de app opent meteen bij de
+  update-instellingen, waar je de update kunt downloaden en installeren. De app
+  kijkt nu ook elke 30 minuten of er een update is (voorheen alleen bij het
+  opstarten).
+
 ### Opgelost
 - **Achtergebleven getal in de taakbalk.** Had je al je post gelezen, dan bleef
   er soms nog een ongelezen-getal op het app-icoon in de taakbalk staan totdat je
   de app opnieuw opende of er nieuwe post binnenkwam. Het getal verdwijnt nu
   meteen zodra er niets meer ongelezen is.
+
+### Added
+- **Update-available notification.** When a new version is ready, you get a
+  desktop notification. Click it and the app opens straight to the update
+  settings, where you can download and install the update. The app now also
+  checks for an update every 30 minutes (previously only at launch).
 
 ### Fixed
 - **Stale taskbar badge.** After you'd read all your mail, the app icon in the
