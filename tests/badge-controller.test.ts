@@ -19,4 +19,14 @@ describe('applyBadge', () => {
     expect(total).toBe(2);
     expect(setBadge).toHaveBeenCalledWith(2);
   });
+  it('clears the overlay when the total is zero', () => {
+    const clearOverlay = vi.fn();
+    applyBadge({ a: 0 }, vi.fn(), new Set(), clearOverlay);
+    expect(clearOverlay).toHaveBeenCalledOnce();
+  });
+  it('does not clear the overlay when something is unread', () => {
+    const clearOverlay = vi.fn();
+    applyBadge({ a: 3 }, vi.fn(), new Set(), clearOverlay);
+    expect(clearOverlay).not.toHaveBeenCalled();
+  });
 });

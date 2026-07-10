@@ -3,6 +3,19 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] — 2026-07-10
+
+### Opgelost
+- **Achtergebleven getal in de taakbalk.** Had je al je post gelezen, dan bleef
+  er soms nog een ongelezen-getal op het app-icoon in de taakbalk staan totdat je
+  de app opnieuw opende of er nieuwe post binnenkwam. Het getal verdwijnt nu
+  meteen zodra er niets meer ongelezen is.
+
+### Fixed
+- **Stale taskbar badge.** After you'd read all your mail, the app icon in the
+  taskbar sometimes kept showing an unread number until you reopened the app or
+  new mail arrived. The number now clears immediately once nothing is unread.
+
 ## [0.2.3] — 2026-07-09
 
 ### Toegevoegd

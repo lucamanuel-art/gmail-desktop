@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen, dialog } from 'electron';
+import { app, BrowserWindow, protocol, net, ipcMain, session, Menu, screen, dialog, Notification } from 'electron';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { release } from 'node:os';
@@ -19,6 +19,7 @@ import { colorForIndex } from './palette';
 import { planNext } from './detection-planner';
 import { addAccountUrl } from './google-urls';
 import { applyBadge } from './badge-controller';
+import { shouldNotifyUpdate } from './update-notifier';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray, updateTrayMenu, type TrayState, type TrayUpdateStatus } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
@@ -70,6 +71,8 @@ let settingsPanelOpen = false;
 let updateRequested = false; // user pressed "Update now" → auto-install once downloaded
 let pendingTrayUpdateCheck = false; // a check started from the tray → announce the result in a popup
 let lastUpdateStatus: Record<string, unknown> = { state: 'idle' };
+let notifiedUpdateVersion: string | null = null; // last version we showed a notification for this session
+let lastCheckBackground = false; // was the in-flight update check a background one?
 let pendingMailto: string | null = null; // a mailto arrived before an inbox was live
 
 const SESSION_PARTITION = 'persist:google';
@@ -261,6 +264,15 @@ function excludedBadgeKeys(): Set<string> {
   }
   return keys;
 }
+// Reflect the current unread total on the OS badge. On Windows the taskbar overlay
+// icon is cleared explicitly when nothing is unread, since app.setBadgeCount's own
+// 0-clear doesn't stick if the window was hidden to the tray when unread dropped —
+// leaving a stale number until the next visible update.
+function refreshBadge(): void {
+  applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys(), () => {
+    if (process.platform === 'win32') mainWindow?.setOverlayIcon(null, '');
+  });
+}
 function pushPrefs(): void {
   if (prefs) mainWindow?.webContents.send(IPC.PREFS_CHANGED, prefs.getAll());
 }
@@ -374,7 +386,7 @@ function removeAccount(email: string): void {
   for (const surface of SURFACES) manager?.discardView(keyOf(profile), surface);
   pushProfiles();
   pushUnread();
-  applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys());
+  refreshBadge();
   if (wasActive && profiles[0]) showAccount(profiles[0].ref, 'mail');
 }
 
@@ -577,6 +589,11 @@ function createWindow(): void {
     webPreferences: { preload: SIDEBAR_PRELOAD_PATH, contextIsolation: true },
   });
   if (stored.maximized) mainWindow.maximize();
+  // Re-assert the badge when the window returns to the taskbar: an overlay clear
+  // issued while hidden to the tray doesn't stick, so Windows would otherwise show
+  // a stale count on restore until the next unread update.
+  mainWindow.on('show', refreshBadge);
+  mainWindow.on('restore', refreshBadge);
   colors = new ColorStore(join(app.getPath('userData'), 'colors.json'));
   removed = new RemovedStore(join(app.getPath('userData'), 'removed.json'));
   delegated = new DelegatedStore(join(app.getPath('userData'), 'delegated.json'));
@@ -586,7 +603,7 @@ function createWindow(): void {
     (accountKey, count) => {
       unreadCounts[accountKey] = count;
       pushUnread();
-      applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys());
+      refreshBadge();
     },
     (accountKey, surface, threadId) => {
       const idx = idxOfKey(accountKey);
@@ -736,12 +753,35 @@ function maybeShowTrayUpdatePopup(): void {
 
 // Update / autostart / snooze actions are factored out so both the IPC handlers
 // (settings UI) and the tray menu invoke the exact same logic.
-function checkForUpdate(): void {
+function checkForUpdate(opts?: { background?: boolean }): void {
+  lastCheckBackground = opts?.background === true;
   if (!app.isPackaged) return sendUpdate({ state: 'dev' });
   sendUpdate({ state: 'checking' });
   autoUpdater
     .checkForUpdates()
     .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+}
+// Show a clickable OS notification for a background-discovered new version, at
+// most once per version per session. Clicking it opens the Settings update
+// section. Manual checks don't reach here as "background", so they stay quiet.
+function maybeNotifyUpdate(version: string): void {
+  if (
+    !shouldNotifyUpdate({
+      state: 'available',
+      version,
+      background: lastCheckBackground,
+      notifiedVersion: notifiedUpdateVersion,
+    })
+  )
+    return;
+  if (!Notification.isSupported()) return;
+  notifiedUpdateVersion = version;
+  const n = new Notification({
+    title: 'Update available',
+    body: `Gmail Desktop ${version} is ready. Click to update.`,
+  });
+  n.on('click', () => openSettingsPanel());
+  n.show();
 }
 function downloadUpdate(): void {
   updateRequested = true;
@@ -805,7 +845,10 @@ function setupUpdater(): void {
   autoUpdater.autoDownload = false; // download only when the user asks
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('checking-for-update', () => sendUpdate({ state: 'checking' }));
-  autoUpdater.on('update-available', (info) => sendUpdate({ state: 'available', version: info.version }));
+  autoUpdater.on('update-available', (info) => {
+    sendUpdate({ state: 'available', version: info.version });
+    maybeNotifyUpdate(info.version);
+  });
   autoUpdater.on('update-not-available', (info) => sendUpdate({ state: 'not-available', version: info.version }));
   autoUpdater.on('error', (err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
   autoUpdater.on('download-progress', (p) => sendUpdate({ state: 'downloading', percent: Math.round(p.percent) }));
@@ -859,7 +902,7 @@ function registerIpc(): void {
       pushProfiles();
     }
   });
-  ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => removeAccount(arg.email));
+  ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => (arg.email));
   ipcMain.on(IPC.UPDATE_CHECK, () => checkForUpdate());
   ipcMain.on(IPC.UPDATE_DOWNLOAD, () => downloadUpdate());
   ipcMain.on(IPC.UPDATE_INSTALL, () => installUpdate());
@@ -892,7 +935,7 @@ function registerIpc(): void {
     pushPrefs(); // keep the settings UI's per-account toggles in sync with what was stored
     refreshNotifyAllowed();
     syncCalendarViews();
-    applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys()); // reflect a badgeCount change immediately
+    refreshBadge(); // reflect a badgeCount change immediately
   });
   ipcMain.on(IPC.SET_ACCOUNT_ORDER, (_e, arg: { emails: string[] }) => {
     prefs!.setOrder(arg.emails);
@@ -966,9 +1009,8 @@ app.whenReady().then(() => {
   // Auto-update from GitHub Releases (packaged builds only; no-op in dev).
   setupUpdater();
   if (app.isPackaged) {
-    autoUpdater
-      .checkForUpdates()
-      .catch((err) => sendUpdate({ state: 'error', message: String(err?.message || err) }));
+    checkForUpdate({ background: true });
+    setInterval(() => checkForUpdate({ background: true }), 30 * 60_000);
   }
 });
 
