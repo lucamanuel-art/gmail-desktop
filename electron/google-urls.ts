@@ -19,6 +19,20 @@ export function isPopoutUrl(url: string): boolean {
   }
 }
 
+// Gmail's "View entire message" link on a clipped email (and the legacy
+// full-message reader) opens a standalone reading page via ?view=lg with
+// target=_blank. Like a pop-out, it must open as its own window: routing it
+// through the in-app open-in-app path loads it into the shared mail view,
+// replacing the inbox with no way back (the reader has no opener history).
+export function isFullMessageViewUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname.toLowerCase() === 'mail.google.com' && u.searchParams.get('view') === 'lg';
+  } catch {
+    return false;
+  }
+}
+
 // Hosts served inside the app windows themselves: every hosted surface
 // (Gmail, Calendar, Drive, Docs, …) plus the Google auth flow. Navigations and
 // popups to these stay in-app; everything else (links clicked inside an email,

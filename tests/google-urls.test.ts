@@ -7,6 +7,7 @@ import {
   isGoogleUrl,
   isFederatedLoginUrl,
   isPopoutUrl,
+  isFullMessageViewUrl,
 } from '../electron/google-urls';
 
 describe('google urls', () => {
@@ -27,6 +28,26 @@ describe('google urls', () => {
     expect(isPopoutUrl('https://mail.google.com/mail/u/0/popout?search=all&th=x')).toBe(true);
     expect(isPopoutUrl('https://mail.google.com/mail/u/0/#inbox/abc')).toBe(false);
     expect(isPopoutUrl('not a url')).toBe(false);
+  });
+
+  it('detects the "View entire message" full-message reader (view=lg)', () => {
+    expect(
+      isFullMessageViewUrl(
+        'https://mail.google.com/mail/u/0/?ui=2&ik=abc&view=lg&permmsgid=msg-f:123&th=456',
+      ),
+    ).toBe(true);
+    // Different authuser slot, same reader.
+    expect(
+      isFullMessageViewUrl('https://mail.google.com/mail/u/2/?ui=2&view=lg&permmsgid=msg-f:9'),
+    ).toBe(true);
+  });
+
+  it('does not treat ordinary Gmail or other views as the full-message reader', () => {
+    expect(isFullMessageViewUrl('https://mail.google.com/mail/u/0/#inbox/abc')).toBe(false);
+    // "Show original" is a different standalone view (view=om), not view=lg.
+    expect(isFullMessageViewUrl('https://mail.google.com/mail/u/0/?ui=2&view=om')).toBe(false);
+    expect(isFullMessageViewUrl('https://calendar.google.com/calendar/u/0/r?view=lg')).toBe(false);
+    expect(isFullMessageViewUrl('not a url')).toBe(false);
   });
 });
 

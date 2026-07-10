@@ -1,5 +1,11 @@
 import { shell, type WebContents } from 'electron';
-import { isInAppUrl, isGoogleUrl, isFederatedLoginUrl, isPopoutUrl } from './google-urls';
+import {
+  isInAppUrl,
+  isGoogleUrl,
+  isFederatedLoginUrl,
+  isPopoutUrl,
+  isFullMessageViewUrl,
+} from './google-urls';
 
 // Routes links that don't belong to the in-app Gmail/Calendar/auth surfaces to
 // the user's default browser instead of opening them inside the mail view.
@@ -27,6 +33,10 @@ export function windowOpenAction(
   popoutExpected: boolean,
 ): WindowOpenAction {
   if (!isInAppUrl(url)) return 'open-external';
+  // The "View entire message" reader is a standalone reading page (like a
+  // pop-out): always let it open as its own window, never load it into the
+  // shared in-app mail view, which would clobber the inbox with no way back.
+  if (isFullMessageViewUrl(url)) return 'allow';
   if (isPopoutUrl(url)) {
     if (popoutExpected) return 'allow'; // the pop-out we deliberately triggered
     if (suppressed) return 'suppress'; // Gmail's own auto pop-out on a notification click

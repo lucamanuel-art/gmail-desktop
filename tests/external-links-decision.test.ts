@@ -8,6 +8,9 @@ import { windowOpenAction } from '../electron/external-links';
 // triggers (popoutExpected) is allowed through.
 const POPOUT = 'https://mail.google.com/mail/u/0/popout?search=all&th=x';
 const THREAD = 'https://mail.google.com/mail/u/0/#inbox/abc';
+// Gmail's "View entire message" link on a clipped email opens this standalone
+// full-message reader via target=_blank.
+const FULL_MSG = 'https://mail.google.com/mail/u/0/?ui=2&ik=abc&view=lg&permmsgid=msg-f:1&th=2';
 
 describe('windowOpenAction', () => {
   it('sends non-Google URLs to the external browser regardless of state', () => {
@@ -44,5 +47,13 @@ describe('windowOpenAction', () => {
   it('allows a manual pop-out click when nothing is being suppressed', () => {
     expect(windowOpenAction(POPOUT, 'app', false, false)).toBe('allow');
     expect(windowOpenAction(POPOUT, 'window', false, false)).toBe('allow');
+  });
+
+  it('always opens the "View entire message" reader as its own window', () => {
+    // The reported bug: in app mode this loaded into the shared mail view,
+    // replacing the inbox with no way back. It must open as a separate window
+    // in either mode (a standalone reader, like a pop-out).
+    expect(windowOpenAction(FULL_MSG, 'app', false, false)).toBe('allow');
+    expect(windowOpenAction(FULL_MSG, 'window', false, false)).toBe('allow');
   });
 });

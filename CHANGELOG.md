@@ -3,6 +3,20 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] — 2026-07-10
+
+### Opgelost
+- **"Volledig bericht weergeven" opende in hetzelfde venster.** Bij een
+  ingekort bericht opende de link "Volledig bericht weergeven" de volledige
+  tekst in hetzelfde venster, waarna je niet meer terug kon naar je inbox. De
+  link opent nu in een apart venster, net als in de browser.
+
+### Fixed
+- **"View entire message" opened in the same window.** On a clipped email, the
+  "View entire message" link loaded the full text into the same window, leaving
+  no way back to your inbox. It now opens in a separate window, as it does in the
+  browser.
+
 ## [0.2.4] — 2026-07-10
 
 ### Toegevoegd
