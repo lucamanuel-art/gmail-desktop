@@ -902,7 +902,7 @@ function registerIpc(): void {
       pushProfiles();
     }
   });
-  ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => (arg.email));
+  ipcMain.on(IPC.REMOVE_ACCOUNT, (_e, arg: { email: string }) => removeAccount(arg.email));
   ipcMain.on(IPC.UPDATE_CHECK, () => checkForUpdate());
   ipcMain.on(IPC.UPDATE_DOWNLOAD, () => downloadUpdate());
   ipcMain.on(IPC.UPDATE_INSTALL, () => installUpdate());
