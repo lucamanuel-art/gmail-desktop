@@ -3,6 +3,19 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.6] — 2026-07-13
+
+### Opgelost
+- **Account verwijderen deed niets.** Klikken op "Weg ermee" bij een account in
+  de instellingen had geen effect meer: het account bleef gewoon in de lijst
+  staan. Verwijderen werkt nu weer, en het account blijft ook na een
+  herdetectie verborgen.
+
+### Fixed
+- **Removing an account did nothing.** Clicking "Remove" on an account in
+  settings no longer had any effect: the account simply stayed in the list.
+  Removal works again, and the account also stays hidden after re-detection.
+
 ## [0.2.5] — 2026-07-10
 
 ### Opgelost
