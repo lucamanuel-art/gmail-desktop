@@ -36,7 +36,11 @@ export const IPC = {
   SETTINGS_FORCE_OPEN: 'settings:force-open', // main -> renderer: open the settings panel (e.g. tray "Check for updates")
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
   MAIL_DEFAULT_STATUS: 'mail:default-status', // main -> renderer: boolean (is default mailto client)
-  NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send({ show: boolean; silent: boolean })
+  NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(NotifyState)
 } as const;
+
+// Payload of IPC.NOTIFY_ALLOWED. `show` gates whether a notification is shown
+// at all; `silent` styles a shown notification (no sound) without suppressing it.
+export type NotifyState = { show: boolean; silent: boolean };
 
 export type { ChangelogVersion, ChangelogEntry } from './changelog';

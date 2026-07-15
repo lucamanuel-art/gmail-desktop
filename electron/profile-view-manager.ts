@@ -1,6 +1,6 @@
 import { BrowserWindow, WebContentsView } from 'electron';
 import { contentBounds } from './layout';
-import { IPC } from './ipc';
+import { IPC, type NotifyState } from './ipc';
 import { attachExternalLinkHandling } from './external-links';
 import type { KeyInput } from './shortcuts';
 import { SURFACES, SURFACE_CONFIG, surfaceForUrl, type Surface } from '../renderer/lib/surfaces';
@@ -247,11 +247,7 @@ export class ProfileViewManager {
     return false;
   }
 
-  pushNotifyAllowed(
-    accountKey: string,
-    surface: Surface,
-    state: { show: boolean; silent: boolean },
-  ): void {
+  pushNotifyAllowed(accountKey: string, surface: Surface, state: NotifyState): void {
     const wc = this.views.get(viewKey(accountKey, surface))?.webContents;
     if (!wc || wc.isDestroyed()) return;
     wc.send(IPC.NOTIFY_ALLOWED, state);

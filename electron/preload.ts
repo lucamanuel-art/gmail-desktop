@@ -1,5 +1,5 @@
 import { parseUnreadCount } from './unread-parser';
-import { IPC } from './ipc';
+import { IPC, type NotifyState } from './ipc';
 
 export function computeAndReport(
   doc: { title: string },
@@ -114,13 +114,10 @@ if (typeof document !== 'undefined') {
   // Lazy require avoids bundling issues and keeps the top of the module Node-safe.
   const { ipcRenderer } = require('electron') as typeof import('electron');
 
-  let notifyState: { show: boolean; silent: boolean } = { show: true, silent: false };
-  ipcRenderer.on(
-    IPC.NOTIFY_ALLOWED,
-    (_e: unknown, state: { show: boolean; silent: boolean }) => {
-      notifyState = state;
-    },
-  );
+  let notifyState: NotifyState = { show: true, silent: false };
+  ipcRenderer.on(IPC.NOTIFY_ALLOWED, (_e: unknown, state: NotifyState) => {
+    notifyState = state;
+  });
 
   // Install before page scripts run so Gmail never sees a null window.open.
   window.open = wrapWindowOpen(window.open.bind(window));
