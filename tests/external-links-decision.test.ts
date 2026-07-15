@@ -49,6 +49,21 @@ describe('windowOpenAction', () => {
     expect(windowOpenAction(POPOUT, 'window', false, false)).toBe('allow');
   });
 
+  it('opens a blank/opener-driven popup as a real window, never handing about: to the OS', () => {
+    // The reported bug: a login/verify flow opens a blank popup (window.open()
+    // / window.open('about:blank')) and then redirects it to the identity
+    // provider itself. Treating about:blank as "not in-app" sent it to
+    // shell.openExternal, which popped a Windows "no app can open this about:
+    // link" dialog and denied the window — so the login page never appeared.
+    // A blank popup must open as a real window the opener can drive, in any state.
+    expect(windowOpenAction('about:blank', 'app', false, false)).toBe('allow');
+    expect(windowOpenAction('about:blank', 'window', false, false)).toBe('allow');
+    expect(windowOpenAction('', 'app', false, false)).toBe('allow');
+    expect(windowOpenAction('about:blank#foo', 'window', false, false)).toBe('allow');
+    // Never suppressed, even right after a notification click.
+    expect(windowOpenAction('about:blank', 'app', true, false)).toBe('allow');
+  });
+
   it('always opens the "View entire message" reader as its own window', () => {
     // The reported bug: in app mode this loaded into the shared mail view,
     // replacing the inbox with no way back. It must open as a separate window

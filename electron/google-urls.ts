@@ -33,6 +33,17 @@ export function isFullMessageViewUrl(url: string): boolean {
   }
 }
 
+// A window.open / navigation with no real destination yet: about:blank (or an
+// empty target). Login and verification flows open such a blank popup first,
+// then navigate it to the identity provider themselves. It must open as a real
+// window the opener can drive — never be handed to shell.openExternal, which on
+// Windows pops a "no app can open this about: link" dialog and the login window
+// never appears.
+export function isBlankUrl(url: string): boolean {
+  const u = url.trim().toLowerCase();
+  return u === '' || u.startsWith('about:');
+}
+
 // Hosts served inside the app windows themselves: every hosted surface
 // (Gmail, Calendar, Drive, Docs, …) plus the Google auth flow. Navigations and
 // popups to these stay in-app; everything else (links clicked inside an email,

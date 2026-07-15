@@ -5,6 +5,7 @@ import {
   isFederatedLoginUrl,
   isPopoutUrl,
   isFullMessageViewUrl,
+  isBlankUrl,
 } from './google-urls';
 
 // Routes links that don't belong to the in-app Gmail/Calendar/auth surfaces to
@@ -32,6 +33,11 @@ export function windowOpenAction(
   suppressed: boolean,
   popoutExpected: boolean,
 ): WindowOpenAction {
+  // A blank popup (about:blank / empty target) is opener-driven: a login or
+  // verification flow opens it, then navigates it to the identity provider
+  // itself. Let it open as a real window so the page can drive it — never
+  // externalise about:, which pops a "no app for this link" OS dialog.
+  if (isBlankUrl(url)) return 'allow';
   if (!isInAppUrl(url)) return 'open-external';
   // The "View entire message" reader is a standalone reading page (like a
   // pop-out): always let it open as its own window, never load it into the
@@ -80,7 +86,7 @@ export function attachExternalLinkHandling(
   // federated-login POST to shell.openExternal would re-issue it as a GET and
   // trip AADSTS900561 — see isFederatedLoginUrl.
   webContents.on('will-navigate', (event, url) => {
-    if (!isGoogleUrl(url) && !isFederatedLoginUrl(url)) {
+    if (!isGoogleUrl(url) && !isFederatedLoginUrl(url) && !isBlankUrl(url)) {
       event.preventDefault();
       void shell.openExternal(url);
     }
