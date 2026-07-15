@@ -36,7 +36,7 @@ export const IPC = {
   SETTINGS_FORCE_OPEN: 'settings:force-open', // main -> renderer: open the settings panel (e.g. tray "Check for updates")
   PREFS_CHANGED: 'prefs:changed', // main -> renderer: full Prefs
   MAIL_DEFAULT_STATUS: 'mail:default-status', // main -> renderer: boolean (is default mailto client)
-  NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send(boolean)
+  NOTIFY_ALLOWED: 'notify:allowed', // main -> mail view: send({ show: boolean; silent: boolean })
 } as const;
 
 export type { ChangelogVersion, ChangelogEntry } from './changelog';

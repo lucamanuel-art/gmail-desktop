@@ -28,7 +28,7 @@ import { resolveShortcut, type KeyInput } from './shortcuts';
 import { openCompose, openFullThreadWindow } from './compose-window';
 import { parseMailto, extractMailtoFromArgv } from './mailto';
 import { sortByOrder } from './account-order';
-import { notificationsAllowed } from './notification-policy';
+import { notificationsAllowed, notificationSilent } from './notification-policy';
 import { updateCheckPopup } from './update-popup';
 import { RENE_ZOOM_FACTOR, RENE_ZOOM_LEVEL } from './rene';
 
@@ -547,7 +547,10 @@ function refreshNotifyAllowed(): void {
   }
   for (const profile of profiles) {
     for (const surface of SURFACES) {
-      manager?.pushNotifyAllowed(keyOf(profile), surface, notificationsAllowed(p, profile.email, now, surface));
+      manager?.pushNotifyAllowed(keyOf(profile), surface, {
+        show: notificationsAllowed(p, profile.email, now, surface),
+        silent: notificationSilent(p, profile.email, surface),
+      });
     }
   }
 }

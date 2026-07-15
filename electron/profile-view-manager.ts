@@ -247,10 +247,14 @@ export class ProfileViewManager {
     return false;
   }
 
-  pushNotifyAllowed(accountKey: string, surface: Surface, allowed: boolean): void {
+  pushNotifyAllowed(
+    accountKey: string,
+    surface: Surface,
+    state: { show: boolean; silent: boolean },
+  ): void {
     const wc = this.views.get(viewKey(accountKey, surface))?.webContents;
     if (!wc || wc.isDestroyed()) return;
-    wc.send(IPC.NOTIFY_ALLOWED, allowed);
+    wc.send(IPC.NOTIFY_ALLOWED, state);
   }
 
   // Discover delegated mailboxes by opening the account's One-Google switcher
