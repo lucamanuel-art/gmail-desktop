@@ -928,12 +928,13 @@ function registerIpc(): void {
     pushDefaultMailStatus();
   });
   ipcMain.on(IPC.SET_SNOOZE, (_e, minutes: number | null) => setSnooze(minutes));
-  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean }) => {
+  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean; notifySound?: boolean }) => {
     const patch: Record<string, unknown> = {};
     if ('label' in arg) patch.label = arg.label;
     if ('notify' in arg) patch.notify = arg.notify;
     if ('calendarNotify' in arg) patch.calendarNotify = arg.calendarNotify;
     if ('badgeCount' in arg) patch.badgeCount = arg.badgeCount;
+    if ('notifySound' in arg) patch.notifySound = arg.notifySound;
     prefs!.setAccount(arg.email, patch);
     pushProfiles();
     pushPrefs(); // keep the settings UI's per-account toggles in sync with what was stored

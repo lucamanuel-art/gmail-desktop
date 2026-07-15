@@ -52,6 +52,7 @@ export interface AccountPref {
   notify?: boolean;
   calendarNotify?: boolean;
   badgeCount?: boolean;
+  notifySound?: boolean;
 }
 export interface Prefs {
   window: { width: number; height: number; x?: number; y?: number; maximized: boolean };
@@ -84,7 +85,7 @@ interface DesktopBridge {
   onUpdateStatus(cb: (status: UpdateStatus) => void): void;
   setAutoStart(v: boolean): void;
   onPrefsChanged(cb: (prefs: Prefs) => void): void;
-  setAccountPref(arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean }): void;
+  setAccountPref(arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean; notifySound?: boolean }): void;
   setAccountOrder(emails: string[]): void;
   setNotifications(arg: { dnd: boolean; quietHours: { enabled: boolean; start: string; end: string } }): void;
   setTheme(theme: 'system' | 'light' | 'dark'): void;
