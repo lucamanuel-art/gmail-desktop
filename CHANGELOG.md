@@ -3,6 +3,27 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.7] — 2026-07-15
+
+### Opgelost
+- **Het taakbalk-cijfer bleef hangen.** Het aantal ongelezen berichten op het
+  app-icoon bleef soms op een oud getal staan, ook nadat alles gelezen was —
+  bijvoorbeeld na het vernieuwen van een gedeelde postbus. Het cijfer klopt nu
+  weer en verdwijnt zodra er niets ongelezen is.
+- **Inloggen of verifiëren opende geen venster.** In plaats van een
+  inlogvenster verscheen soms een Windows-melding ("Download een app om deze
+  koppeling te openen"). Het inlogvenster opent nu gewoon, zodat je kunt
+  inloggen en verifiëren.
+
+### Fixed
+- **The taskbar badge count got stuck.** The unread count on the app icon
+  sometimes stayed on an old number even after everything was read — for
+  example after a shared mailbox refreshed. The count is now correct again and
+  clears as soon as nothing is unread.
+- **Logging in or verifying opened no window.** Instead of a login window, a
+  Windows dialog sometimes appeared ("Download an app to open this link"). The
+  login window now opens as expected, so you can log in and verify.
+
 ## [0.2.6] — 2026-07-13
 
 ### Opgelost
