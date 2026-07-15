@@ -555,9 +555,8 @@ export function SettingsPanel({
                         <input
                           type="checkbox"
                           checked={prefs?.accounts?.[p.email]?.notifySound !== false}
-                          disabled={prefs?.accounts?.[p.email]?.notify === false}
                           onChange={(e) => window.desktop?.setAccountPref({ email: p.email, notifySound: e.target.checked })}
-                          className="h-3.5 w-3.5 accent-blue-600 disabled:opacity-40"
+                          className="h-3.5 w-3.5 accent-blue-600"
                         />
                         {S.soundToggle}
                       </label>

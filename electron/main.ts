@@ -659,6 +659,10 @@ function createWindow(): void {
       const email = profiles.find((p) => keyOf(p) === accountKey)?.email;
       return email ? prefs!.getAccount(email).zoom ?? 0 : 0;
     },
+    (accountKey) => {
+      const email = profiles.find((p) => keyOf(p) === accountKey)?.email;
+      return email ? notificationSilent(prefs!.getAll(), email, 'mail') : false;
+    },
     () => prefs?.getAll().notificationOpen ?? 'app',
     () => (prefs?.getAll().reneMode ? RENE_ZOOM_FACTOR : 1),
   );

@@ -50,6 +50,12 @@ export class ProfileViewManager {
     ) => void,
     private readonly onInput: (accountKey: string, input: KeyInput) => void,
     private readonly getZoom: (accountKey: string) => number,
+    // Whether this account's mail view should be audio-muted. Gmail plays its
+    // own new-mail chime as in-page audio (the "Sounds for email notifications"
+    // setting), independent of the OS notification and of our banner gate, so
+    // the only way to silence it without touching the mailbox owner's Gmail
+    // settings is to mute the view's audio output.
+    private readonly getSilent: (accountKey: string) => boolean,
     private readonly getOpenMode: () => 'app' | 'window',
     // Zoom factor of the sidebar renderer (2 in Rene mode) — the content view
     // must sit past the visually wider sidebar.
@@ -93,6 +99,9 @@ export class ProfileViewManager {
     view.webContents.on('before-input-event', (_e, input) => this.onInput(acctKey, input as unknown as KeyInput));
     view.webContents.on('did-finish-load', () => {
       view.webContents.setZoomLevel(this.getZoom(acctKey));
+      // Apply the mute on every (re)load — a reload resets the audio state, and
+      // this runs before Gmail can play a chime, unlike a delayed IPC push.
+      if (surface === 'mail') view.webContents.setAudioMuted(this.getSilent(acctKey));
     });
     // A Google page can close itself (e.g. Gmail's full-page compose calls
     // window.close() after sending). Drop the dead view from the map so timers
@@ -251,6 +260,10 @@ export class ProfileViewManager {
     const wc = this.views.get(viewKey(accountKey, surface))?.webContents;
     if (!wc || wc.isDestroyed()) return;
     wc.send(IPC.NOTIFY_ALLOWED, state);
+    // Keep the mail view's audio mute in sync with the sound toggle live, so a
+    // pref change takes effect without waiting for a reload. `silent` is only
+    // ever true for the mail surface (see notificationSilent).
+    if (surface === 'mail') wc.setAudioMuted(state.silent);
   }
 
   // Discover delegated mailboxes by opening the account's One-Google switcher
