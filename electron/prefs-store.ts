@@ -8,6 +8,7 @@ export interface AccountPref {
   notify?: boolean;
   calendarNotify?: boolean;
   badgeCount?: boolean;
+  notifySound?: boolean;
 }
 export interface QuietHours {
   enabled: boolean;

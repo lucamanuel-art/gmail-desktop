@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { notificationsAllowed, inQuietHours } from '../electron/notification-policy';
+import { notificationsAllowed, notificationSilent, inQuietHours } from '../electron/notification-policy';
 import { DEFAULT_PREFS, type Prefs } from '../electron/prefs-store';
 
 function prefs(overrides: Partial<Prefs>): Prefs {
@@ -112,5 +112,30 @@ describe('notificationsAllowed — surface', () => {
     qh.notifications.quietHours = { enabled: true, start: '18:00', end: '08:00' };
     qh.accounts['a@x.com'] = { calendarNotify: true };
     expect(notificationsAllowed(qh, 'a@x.com', at(23), 'calendar')).toBe(false);
+  });
+});
+
+describe('notificationSilent', () => {
+  it('is not silent by default (field absent)', () => {
+    expect(notificationSilent(prefs({}), 'a@x.com')).toBe(false);
+  });
+  it('is silent when notifySound is false', () => {
+    const p = prefs({ accounts: { 'a@x.com': { notifySound: false } } });
+    expect(notificationSilent(p, 'a@x.com')).toBe(true);
+  });
+  it('is not silent when notifySound is true', () => {
+    const p = prefs({ accounts: { 'a@x.com': { notifySound: true } } });
+    expect(notificationSilent(p, 'a@x.com')).toBe(false);
+  });
+  it('is never silent for non-mail surfaces', () => {
+    const p = prefs({ accounts: { 'a@x.com': { notifySound: false } } });
+    expect(notificationSilent(p, 'a@x.com', 'calendar')).toBe(false);
+  });
+  it('is independent of DND (silent stays as configured)', () => {
+    const p = prefs({
+      notifications: { dnd: true, quietHours: { enabled: false, start: '18:00', end: '08:00' } },
+      accounts: { 'a@x.com': { notifySound: false } },
+    });
+    expect(notificationSilent(p, 'a@x.com')).toBe(true);
   });
 });

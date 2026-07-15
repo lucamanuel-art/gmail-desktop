@@ -34,3 +34,12 @@ export function notificationsAllowed(
   if (surface !== 'mail') return false; // v1: the other Google apps never notify
   return account?.notify !== false;
 }
+
+export function notificationSilent(
+  prefs: Prefs,
+  email: string,
+  surface: Surface = 'mail',
+): boolean {
+  if (surface !== 'mail') return false; // v1: only mail honours the sound toggle
+  return prefs.accounts[email]?.notifySound === false;
+}
