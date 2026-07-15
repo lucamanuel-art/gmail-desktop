@@ -256,11 +256,16 @@ git commit -m "feat: silence mail notifications when sound toggle is off"
 
 **Files:**
 - Modify: `renderer/app/strings.ts:58-59` (interface), `:179-180` (English), `:262-263` (Dutch/René)
+- Modify: `renderer/app/page.tsx:48` (`AccountPref` interface) and `:87` (`setAccountPref` arg type)
+- Modify: `electron/sidebar-preload.ts:55` (`setAccountPref` bridge arg type)
+- Modify: `electron/main.ts:931` (`SET_ACCOUNT_PREF` handler arg type) and `:934-936` (handler body — persist the field)
 - Modify: `renderer/app/SettingsPanel.tsx:545-553` (add checkbox after the badge one)
 
 **Interfaces:**
-- Consumes: `notifySound` pref (Task 1) via `prefs.accounts[email]`; `window.desktop?.setAccountPref` (already accepts `Partial<AccountPref>`, so `notifySound` is accepted with no bridge change).
+- Consumes: `notifySound` pref (Task 1) via `prefs.accounts[email]`.
 - Produces: a per-account "sound" checkbox, disabled when `notify === false`.
+
+**IMPORTANT — the `setAccountPref` chain uses explicit field lists, NOT `Partial<AccountPref>`.** The field must be threaded through all four spots or the toggle is a silent no-op (the pref never persists): the renderer bridge type (`page.tsx:87`), the renderer `AccountPref` interface (`page.tsx:48`, so the checkbox read typechecks), the preload bridge type (`sidebar-preload.ts:55`), and the main handler — both its arg type (`main.ts:931`) AND its body, which copies each key with `if ('key' in arg)`. The existing `SET_ACCOUNT_PREF` handler already calls `refreshNotifyAllowed()` + `pushPrefs()`, so once the field persists, the `{ show, silent }` re-push and UI round-trip happen automatically.
 
 - [ ] **Step 1: Add the strings to the interface**
 
@@ -289,7 +294,39 @@ In `renderer/app/strings.ts`, after `badgeToggleTitle: 'Tel de post van deze men
   soundToggleTitle: 'Speel een geluidje bij meldingen voor deze meneer of mevrouw',
 ```
 
-- [ ] **Step 4: Add the checkbox in SettingsPanel**
+- [ ] **Step 4: Thread `notifySound` through the renderer types**
+
+In `renderer/app/page.tsx`, add `notifySound?: boolean;` to the `AccountPref` interface (line 48 block, alongside `badgeCount?: boolean;`). Then widen the `setAccountPref` bridge arg type (line 87) — it is an explicit field list, add `notifySound?: boolean`:
+
+```ts
+  setAccountPref(arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean; notifySound?: boolean }): void;
+```
+
+- [ ] **Step 5: Thread `notifySound` through the preload bridge**
+
+In `electron/sidebar-preload.ts`, widen the `setAccountPref` arg type (line 55) — add `notifySound?: boolean`:
+
+```ts
+  setAccountPref: (arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean; notifySound?: boolean }): void =>
+```
+
+- [ ] **Step 6: Thread `notifySound` through the main handler (arg type + persist)**
+
+In `electron/main.ts`, widen the `SET_ACCOUNT_PREF` handler arg type (line 931) — add `notifySound?: boolean`:
+
+```ts
+  ipcMain.on(IPC.SET_ACCOUNT_PREF, (_e, arg: { email: string; label?: string; notify?: boolean; calendarNotify?: boolean; badgeCount?: boolean; notifySound?: boolean }) => {
+```
+
+Then, in the handler body next to the other `if ('...' in arg)` lines (after the `badgeCount` line, ~936), add:
+
+```ts
+    if ('notifySound' in arg) patch.notifySound = arg.notifySound;
+```
+
+This is the load-bearing change: without it the toggle sends the IPC but the pref is never written. Do not touch the existing `refreshNotifyAllowed()` / `pushPrefs()` / `refreshBadge()` calls in that handler.
+
+- [ ] **Step 7: Add the checkbox in SettingsPanel**
 
 In `renderer/app/SettingsPanel.tsx`, insert after the badge `</label>` (line 553, before the closing `</div>` on line 554):
 
@@ -306,15 +343,18 @@ In `renderer/app/SettingsPanel.tsx`, insert after the badge `</label>` (line 553
                       </label>
 ```
 
-- [ ] **Step 5: Typecheck / build the renderer**
+- [ ] **Step 8: Typecheck renderer + electron**
 
-Run: `npm run build:renderer`
-Expected: build succeeds, no TypeScript errors (all three string sets satisfy the `Strings` interface; the new pref key is accepted by `setAccountPref`).
+Run: `npm run build:renderer` (renderer files — page.tsx, SettingsPanel.tsx, strings.ts)
+Expected: build succeeds, no TypeScript errors (all three string sets satisfy the `Strings` interface; `notifySound` accepted by `setAccountPref` and readable on `AccountPref`).
 
-- [ ] **Step 6: Commit**
+Run: `npx tsc --noEmit` (electron files — sidebar-preload.ts, main.ts; the root tsconfig EXCLUDES renderer/, so this does NOT cover the renderer — both commands are required)
+Expected: no errors.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add renderer/app/strings.ts renderer/app/SettingsPanel.tsx
+git add renderer/app/strings.ts renderer/app/SettingsPanel.tsx renderer/app/page.tsx electron/sidebar-preload.ts electron/main.ts
 git commit -m "feat: add per-account notification sound toggle to settings"
 ```
 
