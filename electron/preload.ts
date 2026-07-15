@@ -114,10 +114,13 @@ if (typeof document !== 'undefined') {
   // Lazy require avoids bundling issues and keeps the top of the module Node-safe.
   const { ipcRenderer } = require('electron') as typeof import('electron');
 
-  let notifyAllowed = true;
-  ipcRenderer.on(IPC.NOTIFY_ALLOWED, (_e: unknown, allowed: boolean) => {
-    notifyAllowed = allowed;
-  });
+  let notifyState: { show: boolean; silent: boolean } = { show: true, silent: false };
+  ipcRenderer.on(
+    IPC.NOTIFY_ALLOWED,
+    (_e: unknown, state: { show: boolean; silent: boolean }) => {
+      notifyState = state;
+    },
+  );
 
   // Install before page scripts run so Gmail never sees a null window.open.
   window.open = wrapWindowOpen(window.open.bind(window));
@@ -137,11 +140,14 @@ if (typeof document !== 'undefined') {
     const Original = window.Notification;
     if (Original) {
       const Wrapped = function (this: Notification, title: string, options?: NotificationOptions) {
-        if (!notifyAllowed) {
+        if (!notifyState.show) {
           // Return a harmless stub so Gmail's code doesn't throw; nothing is shown.
           return { onclick: null, close() {}, addEventListener() {} } as unknown as Notification;
         }
-        const n = new Original(title, options);
+        const n = new Original(
+          title,
+          notifyState.silent ? { ...options, silent: true } : options,
+        );
         n.addEventListener('click', () => {
           // Resolve the clicked thread at click time (the row exists by then).
           const threadId = findThreadIdBySubject(document, options?.body ?? '');
