@@ -3,6 +3,23 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.2.8] — 2026-07-15
+
+### Toegevoegd
+- **Meldingsgeluid per account aan/uit.** In Instellingen → Accounts heeft elke
+  postbus nu een "Geluid"-vinkje. Zet je het uit, dan blijven de meldingen van
+  die postbus gewoon zichtbaar op je bureaublad, maar zonder geluid. Handig voor
+  bijvoorbeeld een gedeelde (gedelegeerde) postbus waarvan je de meldingen wel
+  wilt zien maar niet wilt horen. Staat standaard aan, en werkt los van het
+  cijfer op de taakbalk en van "Niet storen".
+
+### Added
+- **Per-account notification sound on/off.** In Settings → Accounts each mailbox
+  now has a "Sound" checkbox. Turn it off and that mailbox's notifications still
+  appear on your desktop, just without a sound. Handy for, say, a shared
+  (delegated) mailbox whose notifications you want to see but not hear. On by
+  default, and independent of the taskbar badge and of Do Not Disturb.
+
 ## [0.2.7] — 2026-07-15
 
 ### Opgelost
