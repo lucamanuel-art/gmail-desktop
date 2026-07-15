@@ -143,6 +143,12 @@ export class ProfileViewManager {
     view.webContents.close();
     this.views.delete(k);
     if (this.activeViewKey === k) this.activeViewKey = null;
+    // A torn-down mail view will never report a fresh unread count again, so its
+    // last-reported number would otherwise stick in the taskbar badge total. Report
+    // 0 through the same channel so the store forgets it. Only the mail surface
+    // feeds unread (see ipc-message above), and a calendar-only discard must not
+    // zero a still-live mail view.
+    if (surface === 'mail') this.onUnread(accountKey, 0);
   }
 
   hideAll(): void {

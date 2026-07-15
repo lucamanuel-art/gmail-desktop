@@ -19,6 +19,7 @@ import { colorForIndex } from './palette';
 import { planNext } from './detection-planner';
 import { addAccountUrl } from './google-urls';
 import { applyBadge } from './badge-controller';
+import { UnreadStore } from './unread-store';
 import { shouldNotifyUpdate } from './update-notifier';
 import { IPC } from './ipc';
 import { shouldHideOnClose, createTray, updateTrayMenu, type TrayState, type TrayUpdateStatus } from './tray-controller';
@@ -79,7 +80,7 @@ const SESSION_PARTITION = 'persist:google';
 
 const profiles: Profile[] = [];
 const seenEmails = new Set<string>();
-const unreadCounts: Record<string, number> = {}; // keyed by accountKey
+const unread = new UnreadStore(); // per-account unread counts, keyed by accountKey
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 let probingIndex: number | null = null;
 // Index of a *visible* probe (the "+ add account" flow) awaiting identity, vs
@@ -251,7 +252,7 @@ function pushProfiles(): void {
   mainWindow?.webContents.send(IPC.PROFILES_CHANGED, decorate([...profiles]));
 }
 function pushUnread(): void {
-  mainWindow?.webContents.send(IPC.UNREAD_CHANGED, { ...unreadCounts });
+  mainWindow?.webContents.send(IPC.UNREAD_CHANGED, unread.snapshot());
 }
 // Accounts the user has opted out of the taskbar badge — any account (owned or
 // delegated) whose badgeCount pref is off. Absent/true means it still counts.
@@ -269,7 +270,7 @@ function excludedBadgeKeys(): Set<string> {
 // 0-clear doesn't stick if the window was hidden to the tray when unread dropped —
 // leaving a stale number until the next visible update.
 function refreshBadge(): void {
-  applyBadge(unreadCounts, (n) => app.setBadgeCount(n), excludedBadgeKeys(), () => {
+  applyBadge(unread.snapshot(), (n) => app.setBadgeCount(n), excludedBadgeKeys(), () => {
     if (process.platform === 'win32') mainWindow?.setOverlayIcon(null, '');
   });
 }
@@ -382,7 +383,7 @@ function removeAccount(email: string): void {
   const wasActive = manager?.activeKey() === keyOf(profile);
   profiles.splice(profiles.indexOf(profile), 1);
   seenEmails.delete(email);
-  delete unreadCounts[keyOf(profile)];
+  unread.forget(keyOf(profile));
   for (const surface of SURFACES) manager?.discardView(keyOf(profile), surface);
   pushProfiles();
   pushUnread();
@@ -601,7 +602,7 @@ function createWindow(): void {
     mainWindow,
     PRELOAD_PATH,
     (accountKey, count) => {
-      unreadCounts[accountKey] = count;
+      unread.report(accountKey, count);
       pushUnread();
       refreshBadge();
     },
