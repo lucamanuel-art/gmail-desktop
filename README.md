@@ -46,6 +46,13 @@ Outputs are written to `dist/`.
 - A **preload** injected into each Gmail view reports the unread count
   (parsed from the document title) and routes notification clicks over IPC.
 
+## Setup guides
+
+- [Delegated postvakken via de Gmail API](docs/delegated-api-setup.md) — copying
+  mail to or from a delegated mailbox. The Gmail API has no notion of a delegate,
+  so this needs a service account with domain-wide delegation; the guide covers
+  why, the install steps, and where the key must (and must not) live.
+
 ## Scope
 
 This is a wrapper around Gmail's web UI, not a standalone mail client. Not
