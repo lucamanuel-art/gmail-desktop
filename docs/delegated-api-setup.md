@@ -288,7 +288,8 @@ je niet per insert opnieuw minten.
 | `electron/gmail-api.ts` | Geen. Alle functies nemen al een `accessToken`. |
 | Tokenbron | Naast `OAuthStore` een bron die tokens voor delegated postvakken haalt en cachet. Zelfde vorm als `StoredToken` (`electron/google-oauth.ts:112`), zonder `refreshToken`. |
 | `electron/mail-copy.ts` | Geen. `CopyTarget.email` is al gewoon een adres. |
-| Doelenlijst | De kopieer-modal moet delegated mailboxen uit `delegated-store` als doel aanbieden, met hun labels via `fetchLabels` op het nieuwe token. |
+| Doelenlijst | `LABELS_GET` filtert nu op `p.kind === 'authuser'` (`electron/main.ts:2232`), dus delegated postvakken vallen eruit. Daar moeten ze bij, met hun labels via `fetchLabels` op het nieuwe token. |
+| Doelenlijst zónder DWD | Tonen kan wel, aanvinken niet: label-ID's en `insert` zijn beide API-only. Geef de rij dan mee met `labels: []` en een `error` ("Beheerdertoegang nodig"), zoals `'Niet gekoppeld'` nu (`electron/main.ts:2236`) — eerlijker dan stil weglaten, want in de sidebar staat het postvak wél. |
 | Foutmeldingen | `GmailHttpError` 401 betekent hier "opnieuw minten", niet "verversen". |
 
 ## 8. Beveiliging
