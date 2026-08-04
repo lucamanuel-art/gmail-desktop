@@ -3,9 +3,12 @@
 Hoe je mail kunt kopiëren **naar en uit een gemachtigd postvak** (een mailbox die
 in Gmail aan jou gedelegeerd is), en hoe je dat correct inricht.
 
-Dit document gaat over de API-kant. De sidebar-kant van delegated mailboxen
-(`electron/delegation.ts`, `electron/delegated-store.ts`) werkt bewust zónder
-API, op de websessie, en verandert hier niet door.
+Lees eerst [§3](#3-waarvoor-je-dwd-wél-en-niet-nodig-hebt): voor de leeskant heb
+je dit misschien niet nodig, en dat scheelt je de hele installatie hieronder.
+
+De sidebar-kant van delegated mailboxen (`electron/delegation.ts`,
+`electron/delegated-store.ts`) werkt bewust zónder API, op de websessie, en
+verandert hier niet door.
 
 ---
 
@@ -64,10 +67,43 @@ uit een andere bron. Je hebt geen tweede code-pad voor delegated nodig, alleen
 een tweede tokenbron.
 
 Let op wat dit *niet* is: dit is geen delegatie, dit is volledige toegang tot een
-postvak. Zie [§7 Beveiliging](#7-beveiliging) — dat is het echte werk aan deze
+postvak. Zie [§8 Beveiliging](#8-beveiliging) — dat is het echte werk aan deze
 feature, niet de installatie.
 
-## 3. Voorwaarden
+## 3. Waarvoor je DWD wél en niet nodig hebt
+
+Belangrijk onderscheid, want het scheelt je mogelijk de halve installatie.
+Kopiëren bestaat uit twee kanten, en die hebben niet dezelfde eisen:
+
+| Kant | Nodig |
+| --- | --- |
+| **Uit** een gemachtigd postvak lezen (bron van een sleep) | Misschien geen DWD — zie hieronder |
+| **Naar** een gemachtigd postvak schrijven (doel van een kopie) | DWD; hier is geen weg omheen |
+
+Voor het schrijven is dat hard: `messages.insert` bestaat alleen in de API. Er is
+geen web-endpoint dat een RFC822-bericht in een postvak zet, dus geen sessieweg
+die je in plaats daarvan kunt gebruiken.
+
+Voor het lezen niet. De app heeft namelijk al een **tweede weg naar de ruwe
+bytes die geen token gebruikt**, alleen de ingelogde sessie
+(`electron/mail-fetch.ts`): de "Origineel bekijken"-pagina (`view=om`), en van
+daaruit de "Origineel downloaden"-link (`view=att&disp=comp`). Dat is de weg die
+overblijft als er geen koppeling is (zie `collectLabelViaApi`,
+`electron/main.ts:1324`).
+
+En een gemachtigd postvak zit in precies dezelfde sessie — het is dezelfde
+inlog, alleen een andere URL: `/mail/u/<host>/d/<token>/` in plaats van
+`/mail/u/<n>/`. De sessieweg heeft dus geen principieel probleem met delegatie;
+`omUrl` bouwt nu alleen de `authuser`-vorm (`electron/mail-fetch.ts:16`).
+
+**Test dit eerst.** Werkt de `view=om`-pagina achter het `/d/<token>/`-pad, dan
+kun je uit gemachtigde postvakken slepen zonder service account, zonder
+beheerder en zonder sleutel op een server. Dat is een aanzienlijk kleiner
+apparaat dan wat hieronder staat, en het is niet zeker dat het werkt — Google
+kan `view=om` onder een delegatiepad anders behandelen. Een half uur uitproberen
+beslist of je de rest van dit document nodig hebt.
+
+## 4. Voorwaarden
 
 | Voorwaarde | Waarom |
 | --- | --- |
@@ -78,7 +114,7 @@ feature, niet de installatie.
 
 ---
 
-## 4. Installatie
+## 5. Installatie
 
 ### Stap 1 — Service account aanmaken
 
@@ -196,7 +232,7 @@ landen. Controleer dit vóór de eerste insert.
 
 ---
 
-## 5. Een token minten
+## 6. Een token minten
 
 Geen library nodig; `node:crypto` kan RS256 ondertekenen. `sa` is het JSON-bestand
 uit stap 1.5.
@@ -245,7 +281,7 @@ async function tokenFor(sa, subject) {
 Cache per postvak op `expiresAt`; bij een labelsleep van honderden berichten wil
 je niet per insert opnieuw minten.
 
-## 6. Waar dit in de app landt
+## 7. Waar dit in de app landt
 
 | Plek | Verandering |
 | --- | --- |
@@ -255,7 +291,7 @@ je niet per insert opnieuw minten.
 | Doelenlijst | De kopieer-modal moet delegated mailboxen uit `delegated-store` als doel aanbieden, met hun labels via `fetchLabels` op het nieuwe token. |
 | Foutmeldingen | `GmailHttpError` 401 betekent hier "opnieuw minten", niet "verversen". |
 
-## 7. Beveiliging
+## 8. Beveiliging
 
 Dit is het deel dat aandacht verdient, want de installatie is het makkelijke
 stuk.
@@ -276,7 +312,7 @@ stuk.
 - **Verwijder de grant als de feature weggaat.** Een vergeten DWD-autorisatie is
   een openstaande deur zonder gebruiker.
 
-## 8. Probleemoplossing
+## 9. Probleemoplossing
 
 | Melding | Oorzaak |
 | --- | --- |
@@ -287,7 +323,7 @@ stuk.
 | `/profile` geeft je eigen adres terug | De `sub`-claim ontbreekt of staat verkeerd. Je werkt tegen je eigen postvak. |
 | Kopie landt op vandaag in plaats van de originele datum | `internalDateSource=dateHeader` mist in de URL — zie `INSERT_URL`, `electron/gmail-api.ts:17`. |
 
-## 9. Wat dit verder oplevert
+## 10. Wat dit verder oplevert
 
 Met tokens voor delegated postvakken werken ook `watch`, `history.list` en
 `labels.get` daar. Concreet: echte ongelezen-tellers en push-meldingen voor
