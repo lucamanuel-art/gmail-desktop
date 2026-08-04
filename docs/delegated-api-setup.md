@@ -332,6 +332,45 @@ gemachtigde postvakken, in plaats van wat er nu uit de paginatitel van de webvie
 gelezen wordt. Dat is geen extra installatie — dezelfde tokens, dezelfde
 functies in `electron/gmail-api.ts`.
 
+## 11. Kan de switcher-scrape weg?
+
+Losse vraag, want dit gaat over *ontdekken* in plaats van *toegang*: kan
+`SWITCHER_SCRAPE_JS` vervangen worden door een API-aanroep, zonder Admin SDK?
+
+**Nee.** Drie muren, en ze staan los van elkaar:
+
+1. **De Gmail API kent geen omgekeerde lookup.** `users.settings.delegates.list`
+   geeft wie er bij *jouw* postvak mag — niet welke postvakken jij mag. Die
+   andere richting bestaat niet. Om het er alsnog uit te krijgen zou je het op
+   élk postvak in het domein moeten aanroepen (dus impersonatie, dus DWD) én de
+   Admin SDK Directory API nodig hebben om die postvakken op te sommen. Precies
+   de twee dingen die je wilde vermijden. Google's eigen antwoord op deze vraag
+   is: kijk in het accountmenu van Gmail.
+2. **De URL is niet te construeren.** De vorm is `/mail/u/<n>/d/<mailbox-id>/`
+   met een opake id. Geen enkele API geeft die id; hij bestaat alleen in Google's
+   eigen UI. Met alleen een e-mailadres kun je de webview dus niet openen — wat
+   de notitie bovenaan `electron/delegation.ts` al vaststelde.
+3. **Die id roteert.** Het opstartpad doet niet alleen ontdekken maar ook
+   verversen: *"refresh persisted /d/ URLs whose opaque token rotated (so stored
+   mailboxes keep opening)"* (`electron/main.ts:313`). De scrape houdt de
+   opgeslagen URL's dus geldig. Een handmatig lijstje adressen in de config valt
+   na een rotatie stil.
+
+Wat er wél kan, is de scrape vervangen door **de klik van de gebruiker** — geen
+API, maar ook geen DOM-parsing. De gebruiker klikt één keer in Google's eigen
+accountmenu op het gemachtigde postvak; jij vangt de navigatie af en neemt de URL
+waar de view op landt. `isDelegatedMailUrl` staat er al voor
+(`electron/delegation.ts:63`), en volgens de notitie in dat bestand was dit ook
+de bedoelde primaire weg (*"click-through capture (Task 7) is primary and the
+durable fallback"*).
+
+In de huidige code is die weg er niet: `addDelegatedMailbox` wordt alleen
+aangeroepen vanuit een scrape-suggestie (`electron/main.ts:2185`), dus de scrape
+is feitelijk de enige bron. Het capture-pad bouwen is daarmee de echte route naar
+"niet meer via de scrape" — met één openstaand punt: na een rotatie moet de
+gebruiker opnieuw klikken, dus vang een mislukte navigatie op en vraag er dan om,
+in plaats van een postvak stil te laten breken.
+
 ---
 
 ## Bronnen
