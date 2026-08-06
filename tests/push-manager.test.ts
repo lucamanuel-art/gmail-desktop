@@ -603,3 +603,55 @@ describe('startPushManager', () => {
     h.manager.stop();
   });
 });
+
+describe('gemachtigde postvakken', () => {
+  it('logt in als de eigenaar en vraagt daarna om omgelegd te worden', async () => {
+    const h = harness({
+      accounts: () => ['bart@x.nl'],
+      accessToken: async () => 'owner-token',
+      subscribeAs: (email: string) => email,
+    });
+    h.sockets[0].fireOpen();
+    await settle();
+    expect(JSON.parse(h.sockets[0].sent[0])).toEqual({ type: 'auth', accessToken: 'owner-token' });
+    expect(JSON.parse(h.sockets[0].sent[1])).toEqual({ type: 'subscribe', mailbox: 'bart@x.nl' });
+    h.manager.stop();
+  });
+
+  it('claimt geen dekking tot de relay de omlegging bevestigt', async () => {
+    const h = harness({
+      accounts: () => ['bart@x.nl'],
+      subscribeAs: (email: string) => email,
+    });
+    h.sockets[0].fireOpen();
+    await settle();
+    // De watch staat, maar er routeert hier nog niets heen — dus de webview moet
+    // de teller houden. Dekking aanzetten zou hem juist het zwijgen opleggen.
+    expect(h.events).toEqual(['watch:bart@x.nl']);
+
+    h.sockets[0].fireMessage(JSON.stringify({ type: 'subscribed', mailbox: 'bart@x.nl' }));
+    expect(h.events).toEqual(['watch:bart@x.nl', 'cover:bart@x.nl:true', 'sync:bart@x.nl']);
+    h.manager.stop();
+  });
+
+  it('laat een eigen account precies zoals het was', async () => {
+    const h = harness({ subscribeAs: () => null });
+    h.sockets[0].fireOpen();
+    await settle();
+    expect(h.sockets[0].sent).toHaveLength(1); // alleen auth, geen subscribe
+    expect(h.events).toEqual(['watch:a@x.nl', 'cover:a@x.nl:true', 'sync:a@x.nl']);
+    h.manager.stop();
+  });
+
+  it('houdt op met proberen als de relay de omlegging weigert', async () => {
+    const h = harness({
+      accounts: () => ['bart@x.nl'],
+      subscribeAs: (email: string) => email,
+    });
+    h.sockets[0].fireOpen();
+    await settle();
+    h.sockets[0].fireClose(4403);
+    expect(h.events).toContain('fatal:bart@x.nl:4403');
+    h.manager.stop();
+  });
+});

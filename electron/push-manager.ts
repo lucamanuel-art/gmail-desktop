@@ -33,6 +33,11 @@ export interface PushManagerDeps {
   // True als de watch staat. Zonder watch stuurt Gmail niets en is het account
   // dus niet gedekt, hoe goed de socket het ook doet.
   armWatch(email: string): Promise<boolean>;
+  // Voor een gemachtigd postvak: het adres waarop deze verbinding moet luisteren.
+  // De socket logt in met het token van de eigenaar — een gemint token draagt
+  // geen e-mailscope en zou door de relay geweigerd worden — en vraagt daarna om
+  // omgelegd te worden. Null voor een eigen account: die luistert op zichzelf.
+  subscribeAs?(email: string): string | null;
   onSync(email: string): void;
   onCoverage(email: string, covered: boolean): void;
   onFatal?(email: string, code: number): void;
@@ -213,6 +218,11 @@ export function startPushManager(deps: PushManagerDeps): { stop(): void; refresh
             return;
           }
           sock.send(JSON.stringify({ type: 'auth', accessToken: token }));
+          // Een gemachtigd postvak: deze verbinding omleggen. De relay
+          // controleert de machtiging en antwoordt met {type:'subscribed'};
+          // weigert hij, dan sluit hij met 4403 en dat is al fataal.
+          const mailbox = deps.subscribeAs?.(email) ?? null;
+          if (mailbox) sock.send(JSON.stringify({ type: 'subscribe', mailbox }));
           const armed = await deps.armWatch(email);
           if (!isLive(email, state, myGen, sock)) return;
           if (!armed) {
@@ -227,8 +237,14 @@ export function startPushManager(deps: PushManagerDeps): { stop(): void; refresh
           scheduleRenew(email, state, myGen);
           // Dekking vóór de catch-up: de meldingsregel meet vanaf dit moment, en
           // mail die daarvoor kwam heeft de webview al gemeld.
-          setCovered(email, state, true);
-          deps.onSync(email);
+          //
+          // Bij een omgelegde verbinding wachten we daar juist mee tot de relay
+          // bevestigt: dekking zet de webview-teller uit, en die uitzetten voor
+          // een postvak waar niets naartoe routeert zou hem stil laten vallen.
+          if (!mailbox) {
+            setCovered(email, state, true);
+            deps.onSync(email);
+          }
         } catch (e) {
           console.warn(`[push] handdruk mislukte voor ${email}:`, e);
           if (isLive(email, state, myGen, sock)) sock.close();
@@ -253,6 +269,12 @@ export function startPushManager(deps: PushManagerDeps): { stop(): void; refresh
       // en terugzetten op dát moment zou een token zonder e-mailscope eeuwig
       // laten verversen en herverbinden.
       if (msg.type === 'ready') state.retriedAuth = false;
+      // De relay heeft de machtiging gecontroleerd en deze verbinding omgelegd.
+      // Pas nu is dit postvak echt gedekt.
+      if (msg.type === 'subscribed') {
+        setCovered(email, state, true);
+        deps.onSync(email);
+      }
       if (msg.type === 'sync') deps.onSync(email);
     });
 
