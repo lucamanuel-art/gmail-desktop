@@ -8,6 +8,32 @@
 
 **Tech Stack:** TypeScript, Node 20, `node:crypto` for RS256 (no JWT library), vitest in both repos, Electron main process on the app side.
 
+## Status — 2026-08-06
+
+All ten tasks are implemented, on branch `feat/delegated-token` in the relay repo
+and `docs/delegated-api` here. Relay: 80 tests. App: 744 tests (22 new).
+`tsc --noEmit` clean in both, and `npm run build:main` bundles.
+
+`npm run delegated:check` in the relay boots the real process three ways
+(no key → 404 with push still healthy; key without `OAUTH_CLIENT_ID` → 404 and a
+logged error; fully configured → reaches the mint, logs the identity, leaks no
+key or token). This replaced the plan's assumption that `index.ts` wiring could
+only be checked by hand.
+
+**Not verified:** Task 9, Step 6 — the manual look at the copy dialog in the
+off-state, which needs the app running on a desktop. And everything in
+"Verification once an administrator has done the grant" below, which needs the
+Google-side setup that does not exist yet.
+
+**Note on WSL:** the relay's toolchain cannot run from WSL directly — there is no
+`node` there, only the Windows shims, and `npm test` falls through to CMD which
+rejects the UNC path. Every relay command in this plan was run inside a container
+instead:
+`docker run --rm -v /home/developer/projects/gmail-push-relay-delegated:/app -w /app node:20 sh -c '…'`
+(add `--network host` for `delegated:check`). Do not pass `$PWD` in such a
+command from a Windows shell — it expands on the Windows side and mounts the
+wrong directory.
+
 Design: [`docs/superpowers/specs/2026-08-06-delegated-mailboxes-api-design.md`](../specs/2026-08-06-delegated-mailboxes-api-design.md).
 Google-side install steps: [`docs/delegated-api-setup.md`](../../delegated-api-setup.md).
 
