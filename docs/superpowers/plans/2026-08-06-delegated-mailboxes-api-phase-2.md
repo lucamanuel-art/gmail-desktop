@@ -8,6 +8,19 @@
 
 **Tech Stack:** TypeScript, Electron main process, vitest.
 
+## Status — 2026-08-06
+
+All three tasks are implemented on branch `docs/delegated-api`. 751 tests
+(7 new), `tsc --noEmit` clean, `npm run build:main` bundles.
+
+Own accounts were checked to be untouched by reading the resulting control flow:
+`delegated` is false, so no token is resolved, `readPathFor` answers `session`,
+and the existing code runs to the same tail. The API branch is unreachable for
+them.
+
+**Not verified:** everything under "Verification once an administrator has done
+the grant" below — it needs the Google-side setup, which does not exist yet.
+
 Design: [`docs/superpowers/specs/2026-08-06-delegated-mailboxes-api-design.md`](../specs/2026-08-06-delegated-mailboxes-api-design.md) §"Phases", phase 2.
 Phase 1 plan: [`2026-08-06-delegated-mailboxes-api-phase-1.md`](./2026-08-06-delegated-mailboxes-api-phase-1.md).
 
