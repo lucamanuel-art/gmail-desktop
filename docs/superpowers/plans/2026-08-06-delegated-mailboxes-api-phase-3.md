@@ -8,6 +8,22 @@
 
 **Tech Stack:** TypeScript, Node 20, vitest in both repos, Electron main process.
 
+## Status — 2026-08-06
+
+All four tasks are implemented. Relay: 88 tests (`feat/delegated-token`, pushed),
+`tsc --noEmit` clean, `npm run delegated:check` still passes. App: 755 tests
+(`docs/delegated-api`), `tsc --noEmit` clean, `npm run build:main` bundles.
+
+Own accounts are covered by the pre-existing `push-manager` tests, which assert
+the exact handshake order and were not edited; a fourth new test pins that an own
+account sends no `subscribe` frame at all.
+
+**Not verified:** everything under "Verification once an administrator has done
+the grant" — it needs the Google-side setup, which does not exist yet. In
+particular check 3 (mail to your own mailbox must not move the delegated tab's
+counter) is the one that proves the re-point works end to end; it is covered by a
+relay test but not against real Pub/Sub traffic.
+
 Design: [`docs/superpowers/specs/2026-08-06-delegated-mailboxes-api-design.md`](../specs/2026-08-06-delegated-mailboxes-api-design.md) §"Phases", phase 3.
 Phase 1: [`…-phase-1.md`](./2026-08-06-delegated-mailboxes-api-phase-1.md) · Phase 2: [`…-phase-2.md`](./2026-08-06-delegated-mailboxes-api-phase-2.md)
 
