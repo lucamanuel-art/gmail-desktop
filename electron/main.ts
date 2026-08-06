@@ -61,7 +61,7 @@ import {
   PAGE_SIZE,
   type LabelThread,
 } from './label-drop';
-import { fetchThreadEmls } from './mail-fetch';
+import { fetchThreadEmls, type FetchedMessage } from './mail-fetch';
 import { NO_SUBJECT } from './dropzone';
 import { shouldHideOnClose, createTray, updateTrayMenu, type TrayState, type TrayUpdateStatus } from './tray-controller';
 import { autoUpdater } from 'electron-updater';
@@ -105,6 +105,7 @@ import { connectAccount, accessTokenFor, forceRefresh } from './oauth-flow';
 import { hasScopes, type OAuthConfig } from './google-oauth';
 import { parsePushConfig, type PushConfig } from './push-config';
 import { parseDelegatedConfig, type DelegatedConfig } from './delegated-config';
+import { readPathFor, NO_ADMIN_ACCESS } from './drop-source';
 import { DelegatedTokenSource } from './delegated-token';
 import { ownerFor } from './delegated-owner';
 import { PushCoverage } from './push-coverage';
@@ -1423,9 +1424,10 @@ async function collectLabelViaApi(
   account: string,
   label: string,
 ): Promise<{ collected: CollectedThread[]; capped: boolean } | null> {
-  const cfg = oauthConfig();
-  if (!cfg || !oauthTokens || !account) return null;
-  const first = await accessTokenFor(cfg, oauthTokens, account);
+  if (!account) return null;
+  // Eigen account of gemachtigd postvak: de resolver weet waar het token vandaan
+  // komt, en fetchThreadRaw hierna merkt het verschil niet.
+  const first = await tokenForAccount(account);
   if (!first) return null;
   let token: string = first;
 
@@ -1435,14 +1437,20 @@ async function collectLabelViaApi(
   const refreshed = async (e: unknown): Promise<boolean> => {
     if (!mayRefresh || !(e instanceof GmailHttpError) || e.status !== 401) return false;
     mayRefresh = false;
-    const fresh = await forceRefresh(cfg, oauthTokens!, account);
+    // Voor een gemachtigd postvak is dit "opnieuw minten": een impersonatieflow
+    // heeft geen refresh token.
+    const fresh = await renewTokenFor(account);
+    const delegated = isDelegatedAccount(account);
     if (!fresh) {
-      refreshFailures.add(account);
-      scheduleOAuthHealthCheck();
+      // Alleen eigen accounts staan in de herverbind-melding.
+      if (!delegated) {
+        refreshFailures.add(account);
+        scheduleOAuthHealthCheck();
+      }
       return false;
     }
     token = fresh;
-    refreshFailures.delete(account);
+    if (!delegated) refreshFailures.delete(account);
     return true;
   };
 
@@ -1513,9 +1521,25 @@ async function saveLabel(
     return { items: [{ threadId: '', subject: label, saved: 0, error }], saved: [] };
   };
 
+  // Niet hetzelfde als leeg: het label is niet leeg, we kunnen er alleen niet
+  // bij. Zonder dit zou een gemachtigd postvak zonder koppeling melden dat het
+  // label geen mail bevat, wat niet waar is.
+  const blocked = () => {
+    try {
+      appendLog(root, [{ ts, account, threadId: '', label, error: NO_ADMIN_ACCESS }]);
+    } catch {
+      /* map niet schrijfbaar */
+    }
+    return {
+      items: [{ threadId: '', subject: label, saved: 0, error: NO_ADMIN_ACCESS }],
+      saved: [],
+    };
+  };
+
   // Liefst via de API: dat is één verzoek per gesprek in plaats van seconden
   // wachten per pagina tot Gmail's lijstweergave is omgeklapt. Lukt dat niet
-  // (geen koppeling, gedelegeerd postvak), dan de oude weg.
+  // (geen koppeling), dan de oude weg — behalve bij een gemachtigd postvak, want
+  // daar kán de oude weg niet komen.
   const viaApi = await collectLabelViaApi(account, label);
   let collected: CollectedThread[];
   let capped: boolean;
@@ -1524,6 +1548,14 @@ async function saveLabel(
     if (viaApi.collected.length === 0) return empty();
     collected = viaApi.collected;
     capped = viaApi.capped;
+    // Hier is de API-weg niet gelukt, dus er is geen bruikbaar token — precies
+    // wat readPathFor met hasToken:false beoordeelt. Voor een gemachtigd postvak
+    // is de sessieweg geen terugval: omUrl bouwt alleen de /mail/u/<n>/-vorm.
+  } else if (
+    readPathFor({ drag: 'label', delegated: isDelegatedAccount(account), hasToken: false }) ===
+    'blocked'
+  ) {
+    return blocked();
   } else {
     const scraped = await collectLabelThreads(ref, authuser, label);
     if (scraped.threads.length === 0) return empty();
