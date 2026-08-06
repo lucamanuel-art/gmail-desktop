@@ -993,13 +993,34 @@ async function saveOneThread(
     return { count: 0, total, error, saved: [] };
   };
 
+  const delegated = isDelegatedAccount(account);
+  // Alleen voor een gemachtigd postvak een token ophalen: eigen accounts houden
+  // bewust de sessieweg, dus daar zou dat alleen verspild werk zijn.
+  const token = delegated ? await tokenForAccount(account) : null;
+  const path = readPathFor({ drag: 'thread', delegated, hasToken: token !== null });
+  if (path === 'blocked') return failed(NO_ADMIN_ACCESS);
+
+  // De API-weg: één verzoek, geen HTML om te ontleden. Dit is de enige manier om
+  // bij een gemachtigd postvak te komen, want de sessieweg kent alleen de
+  // /mail/u/<n>/-vorm en niet het /d/<token>/-pad.
+  let fetched: FetchedMessage[];
+  if (path === 'api') {
+    try {
+      fetched = (await fetchThreadRaw(token!, threadId)).map((raw) => ({ raw }));
+    } catch (e) {
+      return failed(`Ophalen mislukt (${(e as Error).message})`);
+    }
+    if (fetched.length === 0) return failed('Geen bericht in dit gesprek');
+    return persist(fetched);
+  }
+
   let result;
   try {
     result = await fetchThreadEmls(session.fromPartition('persist:google'), { threadId, authuser, ik });
   } catch (e) {
     return failed(`Ophalen mislukt (${(e as Error).message})`);
   }
-  const fetched = result.messages;
+  fetched = result.messages;
   if (fetched.length === 0) {
     // Geen enkele download-link in Gmail's origineel-weergeven-pagina. Meestal
     // omdat Gmail het bericht daar niet kent (een concept bijvoorbeeld) en de
@@ -1025,45 +1046,56 @@ async function saveOneThread(
     return failed(`Gmail: ${uitleg}`);
   }
 
-  const ok: SavedMessage[] = [];
-  const failedRecords: LogRecord[] = [];
-  for (const f of fetched) {
-    if (f.raw) ok.push({ raw: f.raw, headers: parseHeaders(f.raw.toString('utf8')) });
-    else failedRecords.push({ ts, account, threadId, error: f.error ?? 'onbekende fout' });
-  }
-  if (ok.length === 0) return failed(fetched[0]?.error ?? 'Geen bericht opgehaald', fetched.length);
+  return persist(fetched);
 
-  let files: string[];
-  try {
-    files = writeThread(root, ts, ok);
-  } catch {
-    return failed(`Kan niet schrijven naar ${root}`, fetched.length);
-  }
+  // Wat beide wegen delen: wegschrijven, loggen en teruggeven. Als functie zodat
+  // de API-weg hierboven er ook in kan vallen zonder het te herhalen.
+  function persist(all: FetchedMessage[]): {
+    count: number;
+    total: number;
+    error?: string;
+    saved: SavedRef[];
+  } {
+    const ok: SavedMessage[] = [];
+    const failedRecords: LogRecord[] = [];
+    for (const f of all) {
+      if (f.raw) ok.push({ raw: f.raw, headers: parseHeaders(f.raw.toString('utf8')) });
+      else failedRecords.push({ ts, account, threadId, error: f.error ?? 'onbekende fout' });
+    }
+    if (ok.length === 0) return failed(all[0]?.error ?? 'Geen bericht opgehaald', all.length);
 
-  const records: LogRecord[] = ok.map((m, i) => ({
-    ts,
-    account,
-    threadId,
-    messageId: m.headers.messageId,
-    from: m.headers.from,
-    to: m.headers.to,
-    cc: m.headers.cc,
-    subject: m.headers.subject,
-    date: m.headers.date,
-    file: files[i],
-    bytes: m.raw.length,
-    body: extractPlainText(m.raw.toString('utf8')),
-  }));
-  try {
-    appendLog(root, [...records, ...failedRecords]);
-  } catch {
-    /* map niet schrijfbaar; de bestanden staan er wel */
+    let files: string[];
+    try {
+      files = writeThread(root, ts, ok);
+    } catch {
+      return failed(`Kan niet schrijven naar ${root}`, all.length);
+    }
+
+    const records: LogRecord[] = ok.map((m, i) => ({
+      ts,
+      account,
+      threadId,
+      messageId: m.headers.messageId,
+      from: m.headers.from,
+      to: m.headers.to,
+      cc: m.headers.cc,
+      subject: m.headers.subject,
+      date: m.headers.date,
+      file: files[i],
+      bytes: m.raw.length,
+      body: extractPlainText(m.raw.toString('utf8')),
+    }));
+    try {
+      appendLog(root, [...records, ...failedRecords]);
+    } catch {
+      /* map niet schrijfbaar; de bestanden staan er wel */
+    }
+    return {
+      count: ok.length,
+      total: all.length,
+      saved: savedRefs(root, files, ok),
+    };
   }
-  return {
-    count: ok.length,
-    total: fetched.length,
-    saved: savedRefs(root, files, ok),
-  };
 }
 
 // writeThread/writeLabel geven de paden in dezelfde volgorde terug als de
