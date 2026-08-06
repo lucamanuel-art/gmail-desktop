@@ -1260,6 +1260,19 @@ async function ownerTokenFor(mailbox: string): Promise<string | null> {
   return null;
 }
 
+// Het adres van de account waar een gemachtigd postvak onder hangt. Null als dat
+// niet te bepalen is — dan valt ownerTokenFor terug op de gekoppelde accounts.
+function delegatedOwnerEmail(mailbox: string): string | null {
+  const p = profiles.find(
+    (x) => x.kind === 'delegated' && x.email.toLowerCase() === mailbox.toLowerCase(),
+  );
+  if (!p || p.ref.kind !== 'delegated') return null;
+  const authusers = profiles
+    .filter((x) => x.ref.kind === 'authuser')
+    .map((x) => ({ index: x.ref.kind === 'authuser' ? x.ref.index : -1, email: x.email }));
+  return ownerFor(p.ref.mailUrl, authusers);
+}
+
 // Tokens for delegated mailboxes, minted by the relay. Null when nothing is
 // configured — then delegated mailboxes have no labels and cannot be copied to,
 // exactly as before. Rebuilt when the url changes, which also empties the token
@@ -1877,19 +1890,24 @@ function syncRunnerFor(email: string): { run(): Promise<void> } | null {
   // Elke aanroep vraagt opnieuw een token: tussen twee syncs kan er een uur
   // zitten en dan is het oude verlopen.
   const withToken = async <T>(fn: (token: string) => Promise<T>): Promise<T> => {
-    const token = await accessTokenFor(cfg, oauthTokens!, email);
+    // Voor een gemachtigd postvak levert dit het geminte token: history.list en
+    // labels.get draaien dan tegen dát postvak, want `me` ís dat postvak.
+    const token = await tokenForAccount(email);
     if (!token) throw new Error('geen token');
     try {
       return await fn(token);
     } catch (e) {
       if (!(e instanceof GmailHttpError) || e.status !== 401) throw e;
-      const fresh = await forceRefresh(cfg, oauthTokens!, email);
+      const fresh = await renewTokenFor(email);
+      const delegated = isDelegatedAccount(email);
       if (!fresh) {
-        refreshFailures.add(email);
-        scheduleOAuthHealthCheck();
+        if (!delegated) {
+          refreshFailures.add(email);
+          scheduleOAuthHealthCheck();
+        }
         throw e;
       }
-      refreshFailures.delete(email);
+      if (!delegated) refreshFailures.delete(email);
       return await fn(fresh);
     }
   };
@@ -1918,17 +1936,27 @@ function syncRunnerFor(email: string): { run(): Promise<void> } | null {
 }
 
 // Welke accounts push kán dekken: eigen accounts met een token dat de vereiste
-// scopes heeft. Een gedelegeerd postvak heeft geen eigen token en blijft dus de
-// webview gebruiken.
+// scopes heeft, plus gemachtigde postvakken zodra de relay daar tokens voor kan
+// minten. Zonder die koppeling blijft een gemachtigd postvak de webview
+// gebruiken, precies zoals het altijd deed.
 function pushableEmails(): string[] {
   if (!oauthTokens) return [];
-  return profiles
-    .filter((p) => p.kind === 'authuser')
-    .map((p) => p.email)
-    .filter((email) => {
-      const token = oauthTokens!.get(email);
-      return token !== undefined && hasScopes(token);
-    });
+  const ownHasScopes = (email: string): boolean => {
+    const token = oauthTokens!.get(email);
+    return token !== undefined && hasScopes(token);
+  };
+  const out: string[] = [];
+  for (const p of profiles) {
+    if (p.kind === 'authuser') {
+      if (ownHasScopes(p.email)) out.push(p.email);
+      continue;
+    }
+    // Een gemachtigd postvak leunt op de eigenaar: die tekent de verbinding, en
+    // zonder diens scopes komt er sowieso geen token.
+    const owner = delegatedOwnerEmail(p.email);
+    if (delegatedSource() && owner && ownHasScopes(owner)) out.push(p.email);
+  }
+  return out;
 }
 
 function startPush(): void {
@@ -1944,20 +1972,31 @@ function startPush(): void {
   pushManager = startPushManager({
     config,
     accounts: pushableEmails,
-    accessToken: (email) => accessTokenFor(cfg, oauthTokens!, email),
+    // De verbinding wordt getekend door de eigenaar: een gemint token draagt geen
+    // e-mailscope, dus de relay zou het niet kunnen thuisbrengen.
+    accessToken: (email) =>
+      isDelegatedAccount(email) ? ownerTokenFor(email) : accessTokenFor(cfg, oauthTokens!, email),
+    subscribeAs: (email) => (isDelegatedAccount(email) ? email : null),
     // Voor de ene herkansing na een 4401. Bewust forceRefresh en niet
     // accessTokenFor: die laatste geeft het opgeslagen token terug zolang onze
     // eigen klok zegt dat het nog geldig is, en dat is precies het token dat net
     // geweigerd is. Het verse token wordt opgeslagen, dus de nieuwe handdruk
     // pakt het via de gewone weg op.
     refreshToken: async (email) => {
-      const fresh = await forceRefresh(cfg, oauthTokens!, email);
-      if (fresh) refreshFailures.delete(email);
-      else refreshFailures.add(email);
+      // Bij een gemachtigd postvak ging het geweigerde token van de eigenaar over
+      // de lijn, dus die moet ververst worden — niet het geminte token.
+      const target = isDelegatedAccount(email) ? delegatedOwnerEmail(email) : email;
+      if (!target) return null;
+      const fresh = await forceRefresh(cfg, oauthTokens!, target);
+      if (fresh) refreshFailures.delete(target);
+      else refreshFailures.add(target);
       return fresh;
     },
     armWatch: async (email) => {
-      const token = await accessTokenFor(cfg, oauthTokens!, email);
+      // Hier juist wél het geminte token: users.watch moet op het gemachtigde
+      // postvak staan, niet op dat van de eigenaar. `watch` mag met
+      // gmail.readonly, dus de bestaande DWD-scopes volstaan.
+      const token = await tokenForAccount(email);
       if (!token) return false;
       try {
         return (await watchMailbox(token, config.pushTopic)) !== null;
