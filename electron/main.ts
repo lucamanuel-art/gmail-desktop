@@ -104,6 +104,9 @@ import { OAuthStore } from './oauth-store';
 import { connectAccount, accessTokenFor, forceRefresh } from './oauth-flow';
 import { hasScopes, type OAuthConfig } from './google-oauth';
 import { parsePushConfig, type PushConfig } from './push-config';
+import { parseDelegatedConfig, type DelegatedConfig } from './delegated-config';
+import { DelegatedTokenSource } from './delegated-token';
+import { ownerFor } from './delegated-owner';
 import { PushCoverage } from './push-coverage';
 import { HistoryStore } from './history-store';
 import { startPushManager } from './push-manager';
@@ -1184,6 +1187,96 @@ function pushConfig(): PushConfig | null {
   }
 }
 
+// Same file as the client id, and re-read per call for the same reason as
+// pushConfig above: you can add the line without restarting the app.
+function delegatedConfig(): DelegatedConfig | null {
+  try {
+    return parseDelegatedConfig(JSON.parse(readFileSync(OAUTH_CONFIG_PATH, 'utf8')), process.env);
+  } catch {
+    // File missing or unreadable: then this is simply not configured.
+    return parseDelegatedConfig(null, process.env);
+  }
+}
+
+function isDelegatedAccount(email: string): boolean {
+  return profiles.some(
+    (p) => p.kind === 'delegated' && p.email.toLowerCase() === email.toLowerCase(),
+  );
+}
+
+// The relay checks whether the *requester* is a delegate of the mailbox, so the
+// request has to go out as the account that actually holds the delegation.
+// Google's own url says which one that is; if it cannot be resolved, try the
+// connected accounts, because a wrong guess earns a clean 403 and nothing worse.
+async function ownerTokenFor(mailbox: string): Promise<string | null> {
+  const cfg = oauthConfig();
+  if (!cfg || !oauthTokens) return null;
+  const p = profiles.find(
+    (x) => x.kind === 'delegated' && x.email.toLowerCase() === mailbox.toLowerCase(),
+  );
+  const authusers = profiles
+    .filter((x) => x.ref.kind === 'authuser')
+    .map((x) => ({ index: x.ref.kind === 'authuser' ? x.ref.index : -1, email: x.email }));
+  const owner = p && p.ref.kind === 'delegated' ? ownerFor(p.ref.mailUrl, authusers) : null;
+  for (const email of owner ? [owner] : authusers.map((a) => a.email)) {
+    const token = await accessTokenFor(cfg, oauthTokens, email);
+    if (token) return token;
+  }
+  return null;
+}
+
+// Tokens for delegated mailboxes, minted by the relay. Null when nothing is
+// configured — then delegated mailboxes have no labels and cannot be copied to,
+// exactly as before. Rebuilt when the url changes, which also empties the token
+// cache: pointing the app at another relay must not reuse the old one's tokens.
+let delegatedTokens: DelegatedTokenSource | null = null;
+let delegatedTokenUrl = '';
+
+function delegatedSource(): DelegatedTokenSource | null {
+  const cfg = delegatedConfig();
+  if (!cfg) {
+    delegatedTokens = null;
+    delegatedTokenUrl = '';
+    return null;
+  }
+  if (!delegatedTokens || delegatedTokenUrl !== cfg.tokenUrl) {
+    delegatedTokenUrl = cfg.tokenUrl;
+    delegatedTokens = new DelegatedTokenSource({
+      tokenUrl: cfg.tokenUrl,
+      ownerToken: ownerTokenFor,
+      log: (msg) => console.log(msg),
+    });
+  }
+  return delegatedTokens;
+}
+
+// One place that decides where an account's token comes from: OAuth for your own
+// accounts, the relay for delegated mailboxes. Every call site that used to call
+// accessTokenFor directly goes through here, so none of them needs to know which
+// kind of account it is holding.
+async function tokenForAccount(email: string): Promise<string | null> {
+  if (isDelegatedAccount(email)) {
+    const src = delegatedSource();
+    return src ? src.get(email) : null;
+  }
+  const cfg = oauthConfig();
+  if (!cfg || !oauthTokens) return null;
+  return accessTokenFor(cfg, oauthTokens, email);
+}
+
+// What to do when Google answers 401. For a delegated mailbox that means "mint
+// again" — there is no refresh token in an impersonation flow — and for your own
+// accounts it means the refresh we already did.
+async function renewTokenFor(email: string): Promise<string | null> {
+  if (isDelegatedAccount(email)) {
+    const src = delegatedSource();
+    return src ? src.forceMint(email) : null;
+  }
+  const cfg = oauthConfig();
+  if (!cfg || !oauthTokens) return null;
+  return forceRefresh(cfg, oauthTokens, email);
+}
+
 // De controle hangt aan wijzigingen in de accountlijst: zo loopt hij zodra het
 // eerste account bekend is, in plaats van na een vaste wachttijd. Tijdens de
 // detectie registreren accounts één voor één, dus even wachten tot het stil is —
@@ -2229,17 +2322,25 @@ function registerIpc(): void {
     const cfg = oauthConfig();
     // Het bronaccount niet aanbieden: een kopie in hetzelfde postvak is een
     // duplicaat, en verplaatsen binnen één account doet Gmail zelf al.
-    const own = profiles.filter(
-      (p) => p.kind === 'authuser' && (!lastDropSource || p.email !== lastDropSource),
-    );
-    if (!cfg || !oauthTokens) {
+    // Gemachtigde postvakken horen hier ook thuis: met een token van de relay
+    // zijn ze een echt kopieerdoel.
+    const own = profiles.filter((p) => !lastDropSource || p.email !== lastDropSource);
+    if ((!cfg || !oauthTokens) && !delegatedSource()) {
       return { accounts: own.map((p) => ({ email: p.email, labels: [], error: 'Niet gekoppeld' })) };
     }
     const accounts: AccountLabels[] = [];
     for (const p of own) {
-      const token = await accessTokenFor(cfg, oauthTokens, p.email);
+      const token = await tokenForAccount(p.email);
       if (!token) {
-        accounts.push({ email: p.email, labels: [], error: 'Verbinding verlopen' });
+        // Een gemachtigd postvak heeft geen OAuth-koppeling om te verversen:
+        // of de relay is niet ingesteld, of die zegt dat dit postvak niet aan
+        // ons gemachtigd is. De rij mét reden tonen is eerlijker dan weglaten —
+        // in de zijbalk staat het postvak wél.
+        accounts.push({
+          email: p.email,
+          labels: [],
+          error: p.kind === 'delegated' ? 'Beheerdertoegang nodig' : 'Verbinding verlopen',
+        });
         continue;
       }
       try {
@@ -2251,11 +2352,13 @@ function registerIpc(): void {
         // niet, dan is opnieuw toestemming geven het enige dat rest en zetten we
         // dit account in de herverbind-melding.
         const unauthorized = e instanceof GmailHttpError && e.status === 401;
-        const fresh = unauthorized ? await forceRefresh(cfg, oauthTokens, p.email) : null;
+        // Voor een gemachtigd postvak betekent 401 "opnieuw minten", niet
+        // "verversen": een impersonatieflow heeft geen refresh token.
+        const fresh = unauthorized ? await renewTokenFor(p.email) : null;
         if (fresh) {
           try {
             accounts.push({ email: p.email, labels: await fetchLabels(fresh) });
-            refreshFailures.delete(p.email);
+            if (p.kind !== 'delegated') refreshFailures.delete(p.email);
             continue;
           } catch (e2) {
             accounts.push({ email: p.email, labels: [], error: (e2 as Error).message });
@@ -2263,9 +2366,17 @@ function registerIpc(): void {
           }
         }
         if (unauthorized) {
-          refreshFailures.add(p.email);
-          scheduleOAuthHealthCheck();
-          accounts.push({ email: p.email, labels: [], error: 'Verbinding verlopen' });
+          // Alleen eigen accounts staan in de herverbind-melding; een gemachtigd
+          // postvak heeft daar geen koppeling voor.
+          if (p.kind !== 'delegated') {
+            refreshFailures.add(p.email);
+            scheduleOAuthHealthCheck();
+          }
+          accounts.push({
+            email: p.email,
+            labels: [],
+            error: p.kind === 'delegated' ? 'Beheerdertoegang nodig' : 'Verbinding verlopen',
+          });
         } else {
           accounts.push({ email: p.email, labels: [], error: (e as Error).message });
         }
