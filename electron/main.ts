@@ -1099,7 +1099,9 @@ async function findDuplicates(
   if (!oauthTokens) return [];
   const tokens = new Map<string, string>();
   for (const t of targets) {
-    const token = await accessTokenFor(cfg, oauthTokens, t.email);
+    // Gemachtigde doelen worden net zo gecontroleerd als de rest:
+    // messageExistsInLabel maakt het niet uit waar het token vandaan komt.
+    const token = await tokenForAccount(t.email);
     if (token) tokens.set(t.email, token);
   }
 
@@ -2450,10 +2452,15 @@ function registerIpc(): void {
 
     for (const target of targets) {
       progress('copy', target.email);
-      let token = await accessTokenFor(cfg, oauthTokens, target.email);
+      let token = await tokenForAccount(target.email);
       if (!token) {
-        refreshFailures.add(target.email);
-        scheduleOAuthHealthCheck();
+        const delegated = isDelegatedAccount(target.email);
+        // Alleen eigen accounts kunnen opnieuw gekoppeld worden; voor een
+        // gemachtigd postvak zegt dit dat de relay geen token wil geven.
+        if (!delegated) {
+          refreshFailures.add(target.email);
+          scheduleOAuthHealthCheck();
+        }
         done += files.length;
         progress('copy', target.email);
         accounts.push({
@@ -2461,7 +2468,7 @@ function registerIpc(): void {
           copied: 0,
           skipped: 0,
           total: files.length,
-          error: 'Verbinding verlopen',
+          error: delegated ? 'Beheerdertoegang nodig' : 'Verbinding verlopen',
         });
         continue;
       }
@@ -2498,14 +2505,19 @@ function registerIpc(): void {
             id = await insertMessage(token, raw, labelIds);
           } catch (e) {
             if (!(e instanceof GmailHttpError) || e.status !== 401) throw e;
-            const fresh = await forceRefresh(cfg, oauthTokens, target.email);
+            // Voor een gemachtigd postvak is dit "opnieuw minten", niet
+            // "verversen": een impersonatieflow heeft geen refresh token.
+            const fresh = await renewTokenFor(target.email);
+            const delegated = isDelegatedAccount(target.email);
             if (!fresh) {
-              refreshFailures.add(target.email);
-              scheduleOAuthHealthCheck();
-              throw new Error('Verbinding verlopen');
+              if (!delegated) {
+                refreshFailures.add(target.email);
+                scheduleOAuthHealthCheck();
+              }
+              throw new Error(delegated ? 'Beheerdertoegang nodig' : 'Verbinding verlopen');
             }
             token = fresh;
-            refreshFailures.delete(target.email);
+            if (!delegated) refreshFailures.delete(target.email);
             id = await insertMessage(token, raw, labelIds);
           }
           ok += 1;
