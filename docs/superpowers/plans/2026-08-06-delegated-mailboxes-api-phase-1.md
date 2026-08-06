@@ -14,7 +14,8 @@ Google-side install steps: [`docs/delegated-api-setup.md`](../../delegated-api-s
 ## Global Constraints
 
 - **Two repositories.** Tasks 1–5 are in the relay repo at `~/projects/gmail-push-relay` **inside WSL** (reach it with `wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && …"`). Tasks 6–10 are in the app worktree at `C:\Users\luca.manuel\gmail-desktop-build\.claude\worktrees\delegated-api-readme`.
-- **Relay branch:** create `feat/delegated-token` from `main`'s HEAD commit `d445688`. The relay working tree has **uncommitted changes** in `src/auth.ts`, `src/index.ts`, `src/ai-proxy.ts`, `test/auth.test.ts`, `.env.example`, `README.md`, `DEPLOYMENT.md` and `scripts/dev-local.sh`. Leave them alone: `git stash` is shared and must not be used. Branch from the commit, not from the working tree.
+- **Relay branch:** the relay working tree has **uncommitted changes** in `src/auth.ts`, `src/index.ts`, `src/ai-proxy.ts`, `test/auth.test.ts`, `.env.example`, `README.md`, `DEPLOYMENT.md` and `scripts/dev-local.sh`. Leave every one of them alone — `git stash` is shared between worktrees and must not be used. Work instead in a **separate git worktree** at `~/projects/gmail-push-relay-delegated`, branched from commit `d445688`, so that tree stays untouched (Task 1, Step 1).
+- **Do not depend on the uncommitted work.** In particular, at `d445688` the `AuthResult` failure shape is `{ ok: false; reason: 'invalid_token' | 'not_allowed' }` with **no `detail` field** — `detail` exists only in the uncommitted `src/auth.ts`. Log `auth.reason` alone; using `auth.detail` would not compile on this branch.
 - **Do not edit `src/ai-proxy.ts`.** It carries in-flight work. Where its helpers are needed, new copies go in `src/http-util.ts` (Task 4).
 - **New written artifacts are English** — code comments, commit messages, docs. Existing Dutch documents stay Dutch; if one must be edited, keep that file Dutch.
 - **No new npm dependencies.** RS256 signing uses `node:crypto`.
@@ -61,13 +62,23 @@ Google-side install steps: [`docs/delegated-api-setup.md`](../../delegated-api-s
 - Consumes: nothing.
 - Produces: `ServiceAccountKey` (`{ client_email: string; private_key: string }`), `DELEGATED_SCOPES: string[]`, `TOKEN_ENDPOINT: string`, `parseServiceAccountKey(text: string): ServiceAccountKey`, `assertion(key: ServiceAccountKey, mailbox: string, nowSec: number): string`, `MintedToken` (`{ accessToken: string; expiresAt: number }`), `mintToken(mailbox: string, deps: MintDeps): Promise<MintedToken>` where `MintDeps = { key: ServiceAccountKey; fetch?: typeof fetch; now?: () => number; tokenEndpoint?: string }`.
 
-- [ ] **Step 1: Create the branch**
+- [ ] **Step 1: Create an isolated worktree**
+
+A worktree, not a branch switch: the main checkout holds uncommitted work in
+files this plan also touches (`src/index.ts`), and a checkout there would mix the
+two. A worktree gives a clean tree at `d445688` and leaves theirs alone.
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git branch feat/delegated-token d445688 && git checkout feat/delegated-token && git status --short"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git worktree add ~/projects/gmail-push-relay-delegated -b feat/delegated-token d445688"
+wsl.exe -- bash -lc "ln -s ~/projects/gmail-push-relay/node_modules ~/projects/gmail-push-relay-delegated/node_modules"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && git status --short && npx vitest run"
 ```
 
-Expected: the branch is created and checked out; the pre-existing modified files are still listed as modified (that is correct — they are untouched, uncommitted work that must stay that way).
+Expected: a clean status, and the existing suite passes in the new worktree.
+`node_modules` is symlinked rather than reinstalled — same dependencies, no
+second download.
+
+**Every later relay command in this plan runs in `~/projects/gmail-push-relay-delegated`**, not in `~/projects/gmail-push-relay`.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -154,7 +165,7 @@ test('a key file without the two fields that matter is refused', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/delegated.test.ts"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/delegated.test.ts"
 ```
 
 Expected: FAIL — cannot resolve `../src/delegated`.
@@ -288,7 +299,7 @@ export async function mintToken(mailbox: string, deps: MintDeps): Promise<Minted
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/delegated.test.ts && npx tsc --noEmit"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/delegated.test.ts && npx tsc --noEmit"
 ```
 
 Expected: 6 tests pass, no type errors.
@@ -296,7 +307,7 @@ Expected: 6 tests pass, no type errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git add src/delegated.ts test/delegated.test.ts && git commit -m 'feat: mint impersonation tokens for a delegated mailbox
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && git add src/delegated.ts test/delegated.test.ts && git commit -m 'feat: mint impersonation tokens for a delegated mailbox
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>'"
 ```
@@ -399,7 +410,7 @@ test('a refusal is not cached, so a fixed permission takes effect immediately', 
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/delegated-auth.test.ts"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/delegated-auth.test.ts"
 ```
 
 Expected: FAIL — cannot resolve `../src/delegated-auth`.
@@ -490,7 +501,7 @@ export class DelegationCheck {
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/delegated-auth.test.ts && npx tsc --noEmit"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/delegated-auth.test.ts && npx tsc --noEmit"
 ```
 
 Expected: 7 tests pass, no type errors.
@@ -498,7 +509,7 @@ Expected: 7 tests pass, no type errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git add src/delegated-auth.ts test/delegated-auth.test.ts && git commit -m 'feat: authorize impersonation against the mailbox delegate list
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && git add src/delegated-auth.ts test/delegated-auth.test.ts && git commit -m 'feat: authorize impersonation against the mailbox delegate list
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>'"
 ```
@@ -552,7 +563,7 @@ If `test/config.test.ts` does not already import `loadConfig` and `test`/`expect
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/config.test.ts"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/config.test.ts"
 ```
 
 Expected: FAIL — `delegatedEnabled` is undefined.
@@ -590,7 +601,7 @@ and add to the returned object:
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run && npx tsc --noEmit"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run && npx tsc --noEmit"
 ```
 
 Expected: the whole suite passes, no type errors.
@@ -598,7 +609,7 @@ Expected: the whole suite passes, no type errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git add src/config.ts test/config.test.ts && git commit -m 'feat: configure the delegated service account key
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && git add src/config.ts test/config.test.ts && git commit -m 'feat: configure the delegated service account key
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>'"
 ```
@@ -688,7 +699,7 @@ test('a token Google rejects is 401', async () => {
   await handleDelegatedToken(
     makeReq(body, 'Bearer t'),
     res,
-    deps({ verify: async () => ({ ok: false, reason: 'invalid_token', detail: 'aud_mismatch' }) }),
+    deps({ verify: async () => ({ ok: false, reason: 'invalid_token' }) }),
   )
   expect(res.status).toBe(401)
 })
@@ -698,7 +709,7 @@ test('a caller outside ALLOWED_EMAILS is 403', async () => {
   await handleDelegatedToken(
     makeReq(body, 'Bearer t'),
     res,
-    deps({ verify: async () => ({ ok: false, reason: 'not_allowed', detail: 'not_allowed' }) }),
+    deps({ verify: async () => ({ ok: false, reason: 'not_allowed' }) }),
   )
   expect(res.status).toBe(403)
 })
@@ -765,7 +776,7 @@ test('every mint is logged with who asked for which mailbox, and never the token
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/delegated-route.test.ts"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/delegated-route.test.ts"
 ```
 
 Expected: FAIL — cannot resolve `../src/delegated-route`.
@@ -879,7 +890,9 @@ export async function handleDelegatedToken(
 
   const auth = await deps.verify(token)
   if (!auth.ok) {
-    deps.log?.('[delegated] auth rejected', `${auth.reason} (${auth.detail})`)
+    // Only `reason`: the richer `detail` field exists on a branch that has not
+    // landed yet, and this must compile without it.
+    deps.log?.('[delegated] auth rejected', auth.reason)
     send(res, auth.reason === 'not_allowed' ? 403 : 401)
     return
   }
@@ -942,7 +955,7 @@ export async function handleDelegatedToken(
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/delegated-route.test.ts && npx tsc --noEmit"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/delegated-route.test.ts && npx tsc --noEmit"
 ```
 
 Expected: 9 tests pass, no type errors.
@@ -950,7 +963,7 @@ Expected: 9 tests pass, no type errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git add src/http-util.ts src/delegated-route.ts test/delegated-route.test.ts && git commit -m 'feat: serve POST /delegated/token behind two gates
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && git add src/http-util.ts src/delegated-route.ts test/delegated-route.test.ts && git commit -m 'feat: serve POST /delegated/token behind two gates
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>'"
 ```
@@ -1030,7 +1043,7 @@ test('a GET on the delegated route is not served', async () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run test/server.test.ts"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run test/server.test.ts"
 ```
 
 Expected: FAIL — the second test gets 404, and `delegated` is not a known dep.
@@ -1125,7 +1138,7 @@ Then in the `createRelayServer({ … })` call, after the `ai:` property:
 - [ ] **Step 5: Run the whole suite**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && npx vitest run && npx tsc --noEmit"
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && npx vitest run && npx tsc --noEmit"
 ```
 
 Expected: everything passes, no type errors.
@@ -1193,7 +1206,7 @@ place the requester is recorded.
 - [ ] **Step 8: Commit**
 
 ```bash
-wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay && git add src/server.ts src/index.ts test/server.test.ts .env.example README.md && git commit -m 'feat: enable the delegated token route when a key is configured
+wsl.exe -- bash -lc "cd ~/projects/gmail-push-relay-delegated && git add src/server.ts src/index.ts test/server.test.ts .env.example README.md && git commit -m 'feat: enable the delegated token route when a key is configured
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>'"
 ```
