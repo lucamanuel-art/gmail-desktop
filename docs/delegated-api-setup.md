@@ -203,9 +203,13 @@ De app hoeft alleen te weten waar hij een token kan vragen. Dat past in
   "clientSecret": "…",
   "relayUrl": "wss://…",
   "pushTopic": "projects/…/topics/…",
-  "delegatedTokenUrl": "https://relay.example/delegated-token"
+  "delegatedTokenUrl": "https://relay.example/delegated/token"
 }
 ```
+
+Let op het pad: de relay serveert `/delegated/token`, met een schuine streep en
+niet met een koppelteken. Een verkeerd pad levert een kale 404 op waar niets aan
+te zien is wat er mis is.
 
 Ontbreekt die regel, dan blijft kopiëren naar delegated postvakken uit en werkt
 de app precies zoals nu — hetzelfde patroon als push (`electron/push-config.ts:1`).
