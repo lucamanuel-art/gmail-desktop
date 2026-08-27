@@ -112,7 +112,7 @@ export interface Prefs {
     notifyClick: DownloadClickAction;
   };
   phishing: { confirmExternalLinks: boolean; trustedHosts: string[] };
-  updates: { autoCheck: boolean; notify: boolean };
+  updates: { autoCheck: boolean; notify: boolean; beta: boolean };
   googleApps: {
     openInApp: boolean;
     alwaysNewWindow: boolean;
@@ -178,7 +178,7 @@ interface DesktopBridge {
     notifyClick?: DownloadClickAction;
   }): void;
   setPhishing(patch: { confirmExternalLinks?: boolean; trustedHosts?: string[] }): void;
-  setUpdatePrefs(patch: { autoCheck?: boolean; notify?: boolean }): void;
+  setUpdatePrefs(patch: { autoCheck?: boolean; notify?: boolean; beta?: boolean }): void;
   setAdvanced(patch: { hardwareAcceleration?: boolean }): void;
   setVerificationCodes(patch: {
     autoCopy?: boolean;

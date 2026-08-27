@@ -3,6 +3,23 @@
 All notable changes to Gmail Desktop are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## [0.3.1-beta.14] — 2026-08-27
+
+### Toegevoegd
+- **Betaversies aan- of uitzetten in de instellingen.** Onder Updates staat een nieuwe
+  schakelaar, "Betaversies ontvangen". Staat hij uit — en dat is hoe hij begint — dan krijg je
+  alleen afgeronde versies aangeboden, precies zoals nu. Zet je hem aan, dan wordt ook een
+  voorlopige versie als update aangeboden, en zo kom je bij de 1.0.0-beta. De schakelaar werkt
+  meteen; de app hoeft er niet voor opnieuw op.
+
+### Opgelost
+- **Wie op een betaversie zat, kreeg nooit meer een update aangeboden.** De app vroeg GitHub
+  alleen naar de release die daar als "Latest" gemarkeerd staat, en dat is per definitie geen
+  betaversie. Op 0.3.1-beta.13 was de nieuwste "Latest" versie 0.3.0 — ouder dan wat er al
+  stond — dus het antwoord was steevast "je hebt de nieuwste al", terwijl er zes nieuwere
+  beta's klaarstonden. Met de schakelaar hierboven aan loopt de app nu de releaselijst zelf na
+  in plaats van alleen die ene markering te volgen.
+
 ## [0.3.1-beta.13] — 2026-08-20
 
 ### Gewijzigd

@@ -60,6 +60,18 @@ export function UpdatesSection({
             onChange={(v) => window.desktop?.setUpdatePrefs({ notify: v })}
           />
         </SettingRow>
+
+        <SettingRow
+          label={S.betaUpdates}
+          description={S.betaUpdatesDescription}
+          htmlFor="setting-beta-updates"
+        >
+          <Switch
+            id="setting-beta-updates"
+            checked={prefs?.updates.beta === true}
+            onChange={(v) => window.desktop?.setUpdatePrefs({ beta: v })}
+          />
+        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup>

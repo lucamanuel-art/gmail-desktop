@@ -94,6 +94,7 @@ export function loadChangelog(): ChangelogVersion[] {
 export function checkForUpdate(opts?: { background?: boolean }): void {
   lastCheckBackground = opts?.background === true;
   if (!app.isPackaged) return sendUpdate({ state: 'dev' });
+  applyUpdateChannel();
   sendUpdate({ state: 'checking' });
   autoUpdater
     .checkForUpdates()
@@ -139,6 +140,7 @@ export function setupUpdater(): void {
   autoUpdater.logger = updateLog;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  applyUpdateChannel();
   autoUpdater.on('checking-for-update', () => sendUpdate({ state: 'checking' }));
   autoUpdater.on('update-available', (info) => {
     sendUpdate({ state: 'available', version: info.version });
@@ -167,6 +169,19 @@ export function setupUpdater(): void {
 //===========================
 // Helper functions
 //===========================
+
+/** Point electron-updater at the right channel before every check.
+ *
+ * With allowPrerelease off, the provider asks GitHub for the release marked "Latest" and
+ * ignores every pre-release — which is why a beta install sees nothing until a higher
+ * stable release appears. With it on, the provider walks the releases feed instead and
+ * takes the newest beta. Re-applied per check so the setting takes effect without a
+ * restart. The channel file stays latest.yml either way: electron-builder publishes only
+ * that one for the GitHub provider, and electron-updater falls back to it when the
+ * beta.yml it asks for first is absent. */
+function applyUpdateChannel(): void {
+  autoUpdater.allowPrerelease = prefs?.getAll().updates.beta === true;
+}
 
 /** The one place the update state is written and published. */
 function sendUpdate(status: Record<string, unknown>): void {

@@ -72,6 +72,9 @@ export interface PhishingPrefs {
 export interface UpdatePrefs {
   autoCheck: boolean;
   notify: boolean;
+  // Opt-in: follow the beta channel, so pre-releases are offered as updates too.
+  // Off by default — a stable install must never be moved onto a beta silently.
+  beta: boolean;
 }
 
 export interface GoogleAppsPrefs {
@@ -176,7 +179,7 @@ export const DEFAULT_PREFS: Prefs = {
     notifyClick: 'show-in-folder',
   },
   phishing: { confirmExternalLinks: false, trustedHosts: [] },
-  updates: { autoCheck: true, notify: true },
+  updates: { autoCheck: true, notify: true, beta: false },
   googleApps: {
     openInApp: true,
     alwaysNewWindow: false,
@@ -324,6 +327,7 @@ export class PrefsStore {
         updates: {
           autoCheck: bool(raw.updates?.autoCheck, true),
           notify: bool(raw.updates?.notify, true),
+          beta: bool(raw.updates?.beta, false),
         },
         googleApps: {
           openInApp: bool(raw.googleApps?.openInApp, true),

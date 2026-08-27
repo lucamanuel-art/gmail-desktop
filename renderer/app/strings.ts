@@ -103,6 +103,8 @@ export interface UiStrings {
   autoCheckUpdatesDescription: string;
   notifyUpdates: string;
   notifyUpdatesDescription: string;
+  betaUpdates: string;
+  betaUpdatesDescription: string;
 
   miscellaneous: string;
   hardwareAcceleration: string;
@@ -451,6 +453,9 @@ export const STRINGS_NORMAL: UiStrings = {
   autoCheckUpdatesDescription: 'Automatically check for updates periodically.',
   notifyUpdates: 'Notify When Updates Are Available',
   notifyUpdatesDescription: 'Receive notifications when updates are available.',
+  betaUpdates: 'Receive Beta Versions',
+  betaUpdatesDescription:
+    'Also offer pre-release versions. These arrive earlier and may still contain faults.',
 
   miscellaneous: 'Miscellaneous',
   hardwareAcceleration: 'Hardware Acceleration',
@@ -749,6 +754,9 @@ export const STRINGS_RENE: UiStrings = {
   autoCheckUpdatesDescription: 'De app kijkt af en toe of er een nieuwe versie is.',
   notifyUpdates: 'Zeg het als er iets nieuws is',
   notifyUpdatesDescription: 'Je krijgt een melding als er een nieuwe versie klaarstaat.',
+  betaUpdates: 'Ik wil de nieuwe dingen als eerste',
+  betaUpdatesDescription:
+    'Je krijgt versies die nog niet af zijn. Ze zijn er eerder, maar er kan iets in stuk zijn.',
 
   miscellaneous: 'Van alles',
   hardwareAcceleration: 'Snel tekenen',
@@ -1044,6 +1052,9 @@ export const STRINGS_NL: UiStrings = {
   autoCheckUpdatesDescription: 'De app controleert periodiek automatisch op updates.',
   notifyUpdates: 'Melden wanneer er updates zijn',
   notifyUpdatesDescription: 'Ontvang een melding wanneer er updates beschikbaar zijn.',
+  betaUpdates: 'Betaversies ontvangen',
+  betaUpdatesDescription:
+    'Ontvang ook voorlopige versies. Die zijn er eerder, maar kunnen nog fouten bevatten.',
 
   miscellaneous: 'Overig',
   hardwareAcceleration: 'Hardwareversnelling',

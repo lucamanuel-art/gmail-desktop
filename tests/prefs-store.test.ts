@@ -27,6 +27,33 @@ describe('PrefsStore', () => {
     });
   });
 
+  it('defaults the beta channel to off', () => {
+    expect(new PrefsStore(file).getAll().updates.beta).toBe(false);
+  });
+
+  // Every install that predates the setting has an updates block without the key. It must
+  // read back as a real false, not undefined: an upgrade may never move someone onto the
+  // beta channel, and the renderer switch reads the value directly.
+  it('reads a pre-existing updates block as beta off', () => {
+    writeFileSync(file, JSON.stringify({ updates: { autoCheck: false, notify: true } }), 'utf8');
+    expect(new PrefsStore(file).getAll().updates).toEqual({
+      autoCheck: false,
+      notify: true,
+      beta: false,
+    });
+  });
+
+  it('persists the beta channel without dropping the other update prefs', () => {
+    const store = new PrefsStore(file);
+    store.setUpdates({ autoCheck: false });
+    store.setUpdates({ beta: true });
+    expect(new PrefsStore(file).getAll().updates).toEqual({
+      autoCheck: false,
+      notify: true,
+      beta: true,
+    });
+  });
+
   it('merges partial account prefs without dropping siblings', () => {
     const store = new PrefsStore(file);
     store.setAccount('a@x.com', { zoom: 1 });
